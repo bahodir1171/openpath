@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenPath International | Access to Justice</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,600&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        :root {
+            --ink: #12233F;       /* deep institutional navy */
+            --ink-soft: #223759;
+            --paper: #FBF7EC;     /* warm parchment */
+            --paper-deep: #F2EBD9;
+            --verdigris: #3E7C6B; /* signature accent — patinated copper/justice green */
+            --verdigris-dark: #2C5B4E;
+            --brass: #B08D3E;     /* stamped seal gold */
+            --terracotta: #B0432E; /* alert / urgent */
+            --charcoal: #1D2430;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            background-color: var(--paper);
+            color: var(--charcoal);
+            overflow-x: hidden;
+        }
+        h1, h2, h3, h4, .serif-text { font-family: 'Fraunces', serif; }
+        .mono-text { font-family: 'JetBrains Mono', monospace; }
+
+        .fade-in { animation: fadeIn 0.6s ease-out forwards; opacity: 0; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        @media (prefers-reduced-motion: reduce) {
+            .fade-in { animation: none; opacity: 1; }
+            * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+        }
+
+        /* Case-file card styling */
+        .file-card {
+            background: #ffffff;
+            border: 1px solid rgba(18,35,63,0.12);
+            border-radius: 4px;
+            position: relative;
+            transition: all 0.25s ease-in-out;
+        }
+        .file-card:hover {
+            box-shadow: 0 18px 38px -18px rgba(18,35,63,0.35);
+            border-color: rgba(18,35,63,0.22);
+            transform: translateY(-3px);
+        }
+
+        .paper-grain {
+            background-image:
+                repeating-linear-gradient(0deg, rgba(18,35,63,0.025) 0px, rgba(18,35,63,0.025) 1px, transparent 1px, transparent 3px);
+        }
+
+        ::selection { background: var(--verdigris); color: #fff; }
+
+        .focus-ring:focus-visible {
+            outline: 2px solid var(--verdigris);
+            outline-offset: 2px;
+        }
+
+        .btn-primary {
+            background: var(--verdigris);
+            color: #fff;
+        }
+        .btn-primary:hover { background: var(--verdigris-dark); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .divider-stamp {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .divider-stamp::before, .divider-stamp::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(18,35,63,0.15);
+        }
+
+        .scroll-reveal {
+            opacity: 0;
+            transform: translateY(18px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .scroll-reveal.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Form Custom Input Styles */
+        .minimal-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid #E2E8F0;
+            padding: 0.75rem 0;
+            font-size: 1.05rem;
+            color: var(--ink);
+            transition: border-color 0.3s ease;
+        }
+        .minimal-input:focus {
+            outline: none;
+            border-bottom-color: var(--verdigris);
+        }
+        .minimal-input::placeholder { color: #A0AEC0; }
+        .minimal-input.field-error { border-bottom-color: var(--terracotta); }
+
+        /* Honeypot — hidden from real users, visible to bots that auto-fill everything */
+        .hp-field {
+            position: absolute;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+
+        /* Hero Bird Animation */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
+        .hero-bird {
+            animation: float 6s ease-in-out infinite;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.2));
+        }
+
+        /* Custom Scrollbar for Textarea */
+        textarea::-webkit-scrollbar { width: 6px; }
+        textarea::-webkit-scrollbar-track { background: transparent; }
+        textarea::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ============================================================
+        // FORM BACKEND CONFIG
+        // Formspree endpoint — submissions are emailed directly to the
+        // address registered on this Formspree form.
+        // ============================================================
+        const FORMSPREE_ENDPOINT = "https://formspree.io/f/xdenqyqe";
+
+        // --- CONTENT DICTIONARY ---
+        const content = {
+            en: {
+                nav: { home: "Home", news: "News", getHelp: "Get Help", legal: "Legal Base", directories: "Directories", about: "About Us", support: "Support" },
+                common: { readMore: "Read Details", back: "Back", viewDetails: "View", caseRef: "REF", req: "Required" },
+                hero: {
+                    tag: "LEGAL GUIDANCE & ADVOCACY",
+                    title: "Defending Rights. Building Pathways to Justice.",
+                    subtitle: "We map out the exact legal frameworks and institutional connections you need to protect your fundamental human rights against exploitation and abuse.",
+                    cta: "Submit an Intake Form",
+                    ctaSecondary: "Explore the Legal Hub"
+                },
+                stats: [
+                    { value: "7", label: "Core rights frameworks tracked", suffix: "" },
+                    { value: "11", label: "State & UN institutions mapped", suffix: "+" },
+                    { value: "3", label: "Ratified UN conventions covered", suffix: "" },
+                    { value: "100", label: "Free of charge, always", suffix: "%" }
+                ],
+                homeExtra: {
+                    emergencyTitle: "Immediate Danger?",
+                    emergencyDesc: "If you face imminent physical harm or forced deportation, contact local emergency services or your Embassy immediately. We provide legal documentation assistance, not emergency rescue.",
+                    focusTitle: "Core Mandates",
+                    focus1Title: "State & UN Institutions", focus1Desc: "Direct contact protocols for national courts, ombudsmen, and UN Treaty bodies.",
+                    focus2Title: "Data Protection", focus2Desc: "Secure, highly confidential processing of your sensitive legal requests.",
+                    focus3Title: "Pro Bono Support", focus3Desc: "Uncompromisingly free guidance and document preparation for vulnerable groups.",
+                    latestNewsTitle: "Latest Policy Updates",
+                    processTitle: "How a Case Moves Through OpenPath",
+                    processSubtitle: "Every request follows the same disciplined sequence from first contact to institutional referral.",
+                    whoTitle: "Who We Stand With",
+                    whoSubtitle: "Our casework concentrates on the people most exposed to institutional gaps.",
+                    who: [
+                        { title: "Labor Migrants", desc: "Workers abroad facing wage theft, passport confiscation, or unsafe conditions." },
+                        { title: "Undocumented Persons", desc: "Individuals whose status is used against them to suppress legitimate complaints." },
+                        { title: "Survivors of Abuse", desc: "Those facing discrimination, violence, or law enforcement misconduct." },
+                        { title: "Stateless & Families", desc: "People navigating deportation threats or unclear citizenship status." }
+                    ],
+                    faqTitle: "Frequently Asked",
+                    faq: [
+                        { q: "Is this service really free?", a: "Yes. All guidance, document preparation assistance, and institutional referrals are provided pro bono, with no hidden fees at any stage." },
+                        { q: "Do you represent me in court?", a: "No. We are not a law firm. We prepare you with the correct legal mapping and documentation so you or a licensed advocate can act with confidence." },
+                        { q: "How fast will I hear back?", a: "Intake forms are reviewed on a rolling basis. Cases marked urgent are prioritized, though we are not an emergency response service." },
+                        { q: "Is my information confidential?", a: "Yes. Your intake data is processed solely for legal assessment and is not shared beyond the OpenPath legal desk without your consent." }
+                    ]
+                },
+                disclaimer: "OpenPath International is an independent NGO. We provide information and document preparation assistance. Our guidance does not constitute formal legal representation.",
+                howItWorks: {
+                    title: "Our Three-Step Methodology",
+                    step1: "Case Assessment", step1Desc: "Submit your details securely. We review the facts and identify jurisdiction.",
+                    step2: "Legal Mapping", step2Desc: "We determine the exact administrative or judicial mechanism required.",
+                    step3: "Referral & Documents", step3Desc: "We assist in drafting official complaints to competent authorities."
+                },
+                getHelp: {
+                    title: "Legal Intake Form",
+                    subtitle: "Submit your details securely. Your request is emailed directly to our legal desk — no external email app required.",
+                    formName: "Full Legal Name", formCountry: "Country of Residence", formNationality: "Citizenship", formContact: "Email or Phone Number", formIssue: "Primary Violation", formDesc: "Detailed description of the incident", formUrgency: "Does this involve immediate physical danger?", submit: "Submit Secure Request", processing: "Transmitting securely...", privacyConfirm: "I consent to the confidential processing of my data.", formNotice: "Never submit sensitive passwords or banking details through this form.",
+                    successTitle: "Request Received",
+                    successDesc: "Your case details have been securely sent to the OpenPath legal desk. A representative will review your file and reach out to the contact details provided.",
+                    returnBtn: "Submit another inquiry",
+                    errorTitle: "Something went wrong",
+                    errorDesc: "We couldn't send your request. Please check your connection and try again, or email us directly.",
+                    retryBtn: "Try again"
+                },
+                issues: ["Unpaid Wages / Exploitation", "Passport Confiscation", "Immigration / Deportation", "Law Enforcement Misconduct", "Discrimination / Violence", "Access to Healthcare", "Other Violations"],
+
+                newsData: { title: "Policy & Human Rights Briefs", subtitle: "Official updates on Uzbekistan human rights regulations, migration policy, and legal protections.", data: [
+                    { date: "June 2026", title: "Uzbekistan Steps Up Institutional Cooperation with UN", category: "International", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=human+rights", content: "Uzbekistan has stepped up institutional cooperation with the UN concerning statelessness and asylum rights, reinforcing its commitment to international human rights standards." },
+                    { date: "April 2026", title: "Ombudsman's Annual Report Published", category: "Human Rights", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=human+rights", content: "The Authorized Person of the Oliy Majlis for Human Rights reported that 118 state officials were held liable for human rights violations in 2025." },
+                    { date: "March 2026", title: "New U.S. Labor Quotas Determined", category: "Labor Migration", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "The successful integration and compliance of the first organized worker group sent to the United States will establish the baseline for future U.S. labor quotas for Uzbekistan." },
+                    { date: "October 2025", title: "South Korea Resumes Seasonal Work Program", category: "Migration", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "South Korea has officially resumed its seasonal work program for Uzbek citizens, providing legal frameworks for agricultural and manufacturing employment." },
+                    { date: "September 2025", title: "UK Increases Seasonal Worker Quotas", category: "Migration", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "The United Kingdom announced an increase in seasonal worker quotas allocated for Uzbekistan, expanding legal pathways for temporary employment." },
+                    { date: "January 2025", title: "South Korea Reduces Intake Amid Job Abandonment", category: "Policy", source: "Kun.uz", url: "https://kun.uz/en/news/2025/01/18/south-korea-reduces-uzbek-migrant-intake-amid-job-abandonment-concerns", content: "South Korea reduced its intake of Uzbek migrants from 4,878 in 2023 to 3,080 in 2024 under the E-9 visa. This decline is primarily attributed to migrants leaving their designated jobs without valid legal reasons." },
+                    { date: "October 2024", title: "Decree PF-162: Comprehensive Reform of Migration Management", category: "Legislation", source: "CIS Legislation", url: "https://cis-legislation.com/document.fwx?rgn=162994", content: "Presidential Decree No. UP-162 introduced priority measures to reform the management system of migratory processes. It established the Migration Agency as the authorized republican executive body." },
+                    { date: "June 2024", title: "Uzbekistan and Germany Move Towards Labor Migration Agreement", category: "International Relations", source: "Kun.uz", url: "https://kun.uz/en/news/2024/06/20/uzbekistan-germany-to-concur-with-labor-migration", content: "Uzbekistan and Germany concluded the final round of negotiations on a bilateral migration agreement focusing on vocational training based on German standards." }
+                ]},
+
+                legalHub: { title: "Legal Knowledge Base", subtitle: "Comprehensive guides and resources on fundamental rights and international protections.", cards: [{ id: "essentialRights", title: "Fundamental Rights", desc: "Core constitutional and universal human rights applicable to everyone." }, { id: "guides", title: "Action Guides", desc: "Step-by-step legal procedures for addressing specific rights violations." }, { id: "conventions", title: "Ratified Conventions", desc: "UN human rights treaties ratified by Uzbekistan." }, { id: "visas", title: "Visa & Mobility Rules", desc: "Current index of visa-free, e-visa, and visa-required destinations." }] },
+                directoryHub: { title: "Institutional Directories", subtitle: "Verified contact points, legal mandates, and appeal mechanisms.", cards: [{ id: "institutions", title: "State Institutions (Uzbekistan)", desc: "Directory of national human rights bodies, ombudsmen, and ministries." }, { id: "embassies", title: "Embassies & Consulates", desc: "Diplomatic missions providing citizen and consular support abroad." }] },
+
+                visaData: { title: "Passport Mobility Rules", warning: "Visa policies change frequently. Always confirm entry requirements directly with the official embassy before travel.", data: [
+                    { title: "Visa-Free Access", status: "No Visa Required", statusColor: "text-emerald-800 bg-emerald-50 border-emerald-300", desc: "Access to over 50 destinations globally without a prior visa, including recent 2024–2026 agreements.", content: "CIS & Region: Russia, Kazakhstan, Kyrgyzstan, Tajikistan, Belarus, Armenia, Azerbaijan, Georgia, Moldova, Ukraine.\nAsia & Middle East: Turkey, UAE, China, Iran, Malaysia, Thailand, Qatar, Oman, Jordan, Mongolia, Philippines, Singapore.\nAmericas & Islands: Antigua and Barbuda, Barbados, Dominica, Seychelles, Haiti." },
+                    { title: "e-Visa / Visa on Arrival", status: "Action Required", statusColor: "text-amber-800 bg-amber-50 border-amber-300", desc: "Digital or border-issued visas available for around 30-40 countries.", content: "Asia: Indonesia (Bali), Maldives, Sri Lanka, India, Vietnam, Cambodia.\nMiddle East & Africa: Saudi Arabia (Umrah/Tourism), Egypt, Kenya, Madagascar, Mauritius, Bahrain, Kuwait, Zambia." },
+                    { title: "Embassy Visa Required", status: "Embassy Application", statusColor: "text-rose-800 bg-rose-50 border-rose-300", desc: "Pre-approved embassy visas required for over 100 destinations.", content: "Europe: Schengen Area (EU), United Kingdom.\nAmericas: United States, Canada.\nAsia/Oceania: Japan, South Korea, Australia, New Zealand." }
+                ]},
+
+                essentialRights: { title: "Fundamental Human Rights", data: [
+                    { title: "Right to Equality and Non-Discrimination", desc: "UDHR Art. 2 / ICCPR Art. 2: Every individual is entitled to fundamental rights without distinction of race, color, sex, or origin. Undocumented status does not strip you of basic human dignity." },
+                    { title: "Right to Life, Liberty, and Security", desc: "UDHR Art. 3 / ICCPR Art. 9: No arbitrary arrest. If detained, you have the immediate right to be informed of reasons, to legal counsel, and to contact your consulate." },
+                    { title: "Absolute Prohibition of Torture", desc: "UDHR Art. 5 / CAT: No one shall be subjected to torture. This is an absolute, non-derogable norm (jus cogens) under international law." },
+                    { title: "Right to a Fair Trial", desc: "ICCPR Art. 14: Entitlement to a fair and public hearing by a competent, independent tribunal, including the presumption of innocence." },
+                    { title: "Protection Against Arbitrary Deportation", desc: "ICCPR Art. 13: Lawfully present aliens may be expelled only via a legal decision. You have the right to submit reasons against expulsion." },
+                    { title: "Principle of Non-Refoulement", desc: "Refugee Convention Art. 33: No state shall return a person to a territory where they face severe persecution or a threat to life." },
+                    { title: "Labor Rights and Fair Remuneration", desc: "ICESCR Art. 7: The right to safe conditions, fair wages, equal remuneration, and reasonable working hours. Forced labor is strictly prohibited." }
+                ]},
+                guidesData: { title: "Practical Action Guides", data: [
+                    { title: "Responding to Passport Confiscation", category: "Migrant Rights", content: "Passports are state property. Confiscation by employers is illegal.\n1. Send a written demand (SMS/Email) requesting immediate return.\n2. Do not sign waivers or blank documents.\n3. Contact your Embassy immediately for emergency documents.\n4. File a complaint with local labor inspectorates and police." },
+                    { title: "Recovering Unpaid Wages", category: "Labor Law", content: "Wage theft requires rapid evidence gathering.\n1. Secure contracts, timecards, photos, and messages.\n2. Submit a formal Pre-Action Demand Letter to the employer.\n3. File a claim with the local labor tribunal (faster than civil courts).\n4. Do not abandon your job without formal notice unless in danger." },
+                    { title: "Navigating Deportation Threats", category: "Immigration", content: "Employer threats are not legal deportation orders.\n1. Demand written judicial orders. Employers cannot deport you.\n2. You have the right to appeal administrative orders.\n3. Non-Refoulement forbids returning individuals to life-threatening danger." }
+                ]},
+                conventionsData: { title: "Ratified UN Conventions", warning: "UN treaty bodies require the 'exhaustion of domestic remedies' (Supreme Court appeals) prior to submission.", data: [
+                    { title: "International Covenant on Civil and Political Rights (ICCPR)", status: "Ratified: 1995", desc: "Uzbekistan acceded to the First Optional Protocol, allowing individuals to lodge complaints directly to the UN Human Rights Committee in Geneva." },
+                    { title: "Convention against Torture (CAT)", status: "Ratified: 1995", desc: "Allows citizens to utilize UN reporting mechanisms when domestic authorities fail to investigate abuse allegations." },
+                    { title: "Convention on the Elimination of Discrimination Against Women (CEDAW)", status: "Ratified: 1995", desc: "Unresolved systemic gender discrimination violations can be escalated to the CEDAW Committee." }
+                ]},
+                institutionsData: { title: "State Institutions (Uzbekistan)", data: [
+                    { title: "Ombudsman of the Republic of Uzbekistan", desc: "Parliamentary body for independent oversight of state agencies.", details: "Jurisdiction: Complaints, detention monitoring.\nAddress: 57/1 Mirzo Ulugbek St, Tashkent\nPhone: +998 71 239 81 36\nWeb: ombudsman.uz" },
+                    { title: "National Centre for Human Rights", desc: "Coordinates national strategy and UN interaction.", details: "Address: 15 Islam Karimov St, Tashkent\nPhone: +998 71 239 13 58\nWeb: nhrc.uz" },
+                    { title: "Ministry of Justice", desc: "Ensures rule of law and free legal aid.", details: "Platforms: ijro.uz, advice.uz\nHotline: 1008\nWeb: minjust.uz" },
+                    { title: "Migration Agency", desc: "Protects labor rights abroad.", details: "Address: 17 Kamarniso St, Tashkent\nHotline: 1282\nWeb: migration.uz" },
+                    { title: "General Prosecutor's Office", desc: "Supervises execution of laws.", details: "Hotline: 1007\nWeb: prokuratura.uz" },
+                    { title: "Supreme Court & Constitutional Court", desc: "Final domestic appeal tier.", details: "Address: 32 Abdulla Qodiriy St, Tashkent\nWeb: sud.uz" }
+                ]},
+                embassiesData: { title: "Embassies & Consulates", data: [
+                    { title: "Embassy in the Russian Federation (Moscow)", desc: "Broad legal support and emergency interventions.", details: "Address: Pogorelskiy Pereulok 12\nPhone: +7 499 230 00 76\nEmail: info@uzembassy.ru" },
+                    { title: "Embassy in Turkey (Ankara)", desc: "Consular protection for citizens in Turkey.", details: "Address: Hilal Mah. 706. Sk. No:4, Çankaya\nPhone: +90 312 441 17 46\nEmail: uzembassy@uzembassy.org.tr" },
+                    { title: "Consulate General in Kazakhstan (Almaty)", desc: "Support for labor migrants and cross-border transit.", details: "Address: 36 Baribayev St.\nPhone: +7 727 291 06 44" },
+                    { title: "Embassy in South Korea (Seoul)", desc: "Migrant labor protection.", details: "Address: 27, Daesagwan-Ro 11-Gil\nPhone: +82 2 574 65 54" },
+                    { title: "Consulate General in UAE (Dubai)", desc: "Assists labor migrants in UAE.", details: "Address: Villa 44, Al Badaa\nPhone: +971 4 371 3333" },
+                    { title: "Embassy in Germany (Berlin)", desc: "Primary hub for EU institutions.", details: "Address: Perleberger Str. 62\nPhone: +49 30 394 098 13" },
+                    { title: "Embassy in Poland (Warsaw)", desc: "Emerging EU destination support.", details: "Address: Kraski 21\nPhone: +48 22 894 62 30" },
+                    { title: "Embassy in the UK (London)", desc: "Seasonal worker protection.", details: "Address: 41 Holland Park\nPhone: +44 20 7229 7679" },
+                    { title: "Embassy in Saudi Arabia (Riyadh)", desc: "Support for citizens in the Gulf region.", details: "Address: Al-Waha District, Abu Al-Mawahib St.\nPhone: +966 11 462 3550" },
+                    { title: "Embassy in Japan (Tokyo)", desc: "Legal support for labor agreements.", details: "Address: 2-1-52 Takanawa, Minato-ku\nPhone: +81 3 6277 3442" },
+                    { title: "Embassy in the USA (Washington, D.C.)", desc: "Consular protection for North America.", details: "Address: 3922 14th St NW\nPhone: +1 202 885 3260\nEmail: info@uzbekistan.org" }
+                ]},
+                about: {
+                    title: "About OpenPath International",
+                    ourStoryTitle: "Institutional Context",
+                    ourStory: "OpenPath International was established to address a critical gap: rights exist in treaties, but people live in reality. Migrant workers frequently face exploitation, unaware that both national and international bodies are mandated to protect them. OpenPath was built to provide the legal literacy and institutional maps necessary to access justice.",
+                    missionTitle: "Mission",
+                    mission: "To dismantle procedural barriers between vulnerable individuals and justice systems. Lack of language proficiency or wealth must never result in impunity for rights violations.",
+                    visionTitle: "Vision",
+                    vision: "A system where every individual can seamlessly access and leverage the mechanisms of justice.",
+                    valuesTitle: "Core Principles",
+                    values: ["Independence", "Human Dignity", "Transparency", "Confidentiality", "Rule of Law"],
+                    methodologyTitle: "Methodology",
+                    methodology: "We assess cases confidentially, map available administrative or UN mechanisms, assist with formal complaints, and directly connect victims with verified ombudsmen or tribunals.",
+
+                    founderTitle: "Founder & Leadership",
+                    founderName: "Bahodir Muzaffarov",
+                    founderRole: "International Law Researcher",
+                    founderEduTitle: "Academic Foundation",
+                    founderEdu: "Bahodir completed his secondary education at the Bukhara Presidential School under the Cambridge International Curriculum, successfully achieving AS/A Levels in Mathematics, Physics, and Computer Science, with a Grade A in Pure Mathematics & Statistics. He is currently pursuing an International Law degree at Tashkent State University of Law (TSUL).",
+                    founderExpTitle: "Public Service Experience",
+                    founderExp: "His professional background includes strategic internships across central government institutions. He has interned at the Ministry of Justice of Uzbekistan, ensuring legality while working with the lawyer.ijro.uz platform (2025–2026). He interned at the Ministry of Foreign Affairs of Uzbekistan, contributing to diplomatic events (2026), and successfully passed competitive selection for an internship at the Embassy of the Republic of Uzbekistan in India. He also volunteers at the TSUL Legal Clinic, answering citizen queries and helping prepare court documents.",
+                    founderAwardsTitle: "Research & Advocacy",
+                    founderAwards: "He serves as a University Research Assistant aiding research for a book on international law. He is a published author on cryptocurrency regulation in the Uzbek Journal of Law and Digital Policy. Furthermore, he is a recipient of the National Scholarship Programme of the Slovak Republic for study mobility at Pavol Jozef Šafárik University, and served as an official volunteer for the UNESCO 43rd General Conference.",
+                    founderQuote: "\"Knowing your rights is only the start; you must possess the practical roadmap to institutional mechanisms that enforce them. OpenPath provides that exact map.\""
+                },
+                support: { title: "Support Our Work", subtitle: "Contributions fund secure intake systems, legal research, and pro bono document assistance.", donateBtn: "Make a Contribution", contact: "Contact Information", email: "bahodirmuzaffarov5@gmail.com", phone: "(+998) 88 292 29 99", address: "Tashkent, Uzbekistan" }
+            },
+            ru: {
+                nav: { home: "Главная", news: "Новости", getHelp: "Заявка", legal: "Правовая база", directories: "Справочники", about: "О нас", support: "Поддержка" },
+                common: { readMore: "Читать далее", back: "Назад", viewDetails: "Подробнее", caseRef: "№ ДЕЛА", req: "Обязательно" },
+                hero: {
+                    tag: "ЮРИДИЧЕСКАЯ ПОДДЕРЖКА",
+                    title: "Защита прав и доступ к правосудию",
+                    subtitle: "Обеспечиваем мигрантов и уязвимых лиц юридической ясностью и механизмами для защиты их прав на глобальном уровне.",
+                    cta: "Оставить заявку",
+                    ctaSecondary: "База знаний",
+                },
+                stats: [
+                    { value: "7", label: "Базовых правозащитных норм", suffix: "" },
+                    { value: "11", label: "Государственных и ООН органов", suffix: "+" },
+                    { value: "3", label: "Ратифицированных конвенций ООН", suffix: "" },
+                    { value: "100", label: "Бесплатно, без исключений", suffix: "%" }
+                ],
+                homeExtra: {
+                    emergencyTitle: "Угроза безопасности?",
+                    emergencyDesc: "Если вам грозит непосредственная физическая опасность или незаконная депортация, немедленно свяжитесь со службами спасения. Мы предоставляем юридическую помощь.",
+                    focusTitle: "Наши направления",
+                    focus1Title: "Институты и ООН", focus1Desc: "Прямые протоколы связи с национальными судами и договорными органами ООН.",
+                    focus2Title: "Защита данных", focus2Desc: "Безопасная и строго конфиденциальная обработка ваших запросов.",
+                    focus3Title: "Pro Bono", focus3Desc: "Бесплатное консультирование и подготовка документов для уязвимых групп.",
+                    latestNewsTitle: "Последние новости",
+                    processTitle: "Как проходит дело в OpenPath",
+                    processSubtitle: "Каждый запрос проходит один и тот же дисциплинированный путь от обращения до передачи в инстанцию.",
+                    whoTitle: "Кому мы помогаем",
+                    whoSubtitle: "Наша работа сосредоточена на тех, кто наиболее уязвим перед институциональными пробелами.",
+                    who: [
+                        { title: "Трудовые мигранты", desc: "Работники за рубежом, столкнувшиеся с невыплатой зарплаты или изъятием паспорта." },
+                        { title: "Лица без документов", desc: "Люди, чей статус используют против них, чтобы подавить законные жалобы." },
+                        { title: "Пострадавшие от насилия", desc: "Столкнувшиеся с дискриминацией или неправомерными действиями полиции." },
+                        { title: "Семьи в зоне риска", desc: "Столкнувшиеся с угрозой депортации или неясным статусом гражданства." }
+                    ],
+                    faqTitle: "Частые вопросы",
+                    faq: [
+                        { q: "Услуга действительно бесплатна?", a: "Да. Все консультации, помощь с документами и направления в инстанции предоставляются pro bono, без скрытых платежей." },
+                        { q: "Вы представляете меня в суде?", a: "Нет. Мы не юридическая фирма. Мы готовим точную правовую карту и документы, чтобы вы или лицензированный адвокат могли действовать уверенно." },
+                        { q: "Как быстро вы отвечаете?", a: "Заявки рассматриваются в порядке очереди. Срочные случаи имеют приоритет, хотя мы не служба экстренного реагирования." },
+                        { q: "Мои данные конфиденциальны?", a: "Да. Данные заявки используются исключительно для юридической оценки и не передаются третьим лицам без вашего согласия." }
+                    ]
+                },
+                disclaimer: "OpenPath International — независимая НПО. Мы предоставляем информацию и помощь с документами. Мы не являемся юридической фирмой.",
+                howItWorks: { title: "Методология", step1: "Оценка", step1Desc: "Безопасно опишите ситуацию.", step2: "Пути", step2Desc: "Определение доступных механизмов.", step3: "Документы", step3Desc: "Помощь в составлении жалоб." },
+                getHelp: {
+                    title: "Заявка на помощь",
+                    subtitle: "Пожалуйста, заполните форму ниже. Запрос будет отправлен напрямую на почту юридического отдела, без внешних почтовых клиентов.",
+                    formName: "Полное имя", formCountry: "Страна пребывания", formNationality: "Гражданство", formContact: "Email или Телефон", formIssue: "Тип нарушения", formDesc: "Детальное описание ситуации", formUrgency: "Присутствует ли физическая угроза?", submit: "Отправить запрос", processing: "Отправка...", privacyConfirm: "Согласен на конфиденциальную обработку данных.", formNotice: "Никогда не отправляйте пароли через эту форму.",
+                    successTitle: "Запрос успешно получен",
+                    successDesc: "Детали вашего дела были отправлены в юридический отдел OpenPath. Представитель свяжется с вами в ближайшее время.",
+                    returnBtn: "Отправить новый запрос",
+                    errorTitle: "Произошла ошибка",
+                    errorDesc: "Не удалось отправить запрос. Проверьте подключение и попробуйте снова, либо напишите нам напрямую.",
+                    retryBtn: "Повторить"
+                },
+                issues: ["Невыплата зарплаты / Эксплуатация", "Изъятие паспорта", "Иммиграция / Депортация", "Действия полиции", "Дискриминация / Насилие", "Доступ к медицине", "Другое"],
+
+                newsData: { title: "Новости и Реформы", subtitle: "Официальные изменения в сфере прав человека и миграционной политики.", data: [
+                    { date: "Июнь 2026", title: "Узбекистан усиливает сотрудничество с ООН", category: "Международное право", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=human+rights", content: "Узбекистан активизировал сотрудничество с ООН по вопросам безгражданства." },
+                    { date: "Апрель 2026", title: "Отчет Омбудсмана о нарушениях прав", category: "Права человека", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=human+rights", content: "Омбудсман сообщил, что 118 чиновников привлечены к ответственности в 2025 году." },
+                    { date: "Март 2026", title: "Трудовые квоты США", category: "Миграция", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "Успех первой группы рабочих определит будущие квоты США для Узбекистана." },
+                    { date: "Октябрь 2025", title: "Южная Корея возобновила сезонные работы", category: "Миграция", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "Возобновлена программа сезонных работ для граждан Узбекистана." },
+                    { date: "Сентябрь 2025", title: "Великобритания увеличивает квоты", category: "Миграция", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "Увеличены квоты на сезонных работников для Узбекистана." },
+                    { date: "Январь 2025", title: "Южная Корея сокращает прием мигрантов", category: "Политика", source: "Kun.uz", url: "https://kun.uz/en/news/2025/01/18/south-korea-reduces-uzbek-migrant-intake-amid-job-abandonment-concerns", content: "Прием мигрантов по визе E-9 сокращен из-за нарушений контрактов." },
+                    { date: "Октябрь 2024", title: "Указ ПФ-162: Реформа управления миграцией", category: "Законодательство", source: "CIS Legislation", url: "https://cis-legislation.com/document.fwx?rgn=162994", content: "Миграционное агентство назначено органом по реализации госполитики." },
+                    { date: "Июнь 2024", title: "Соглашение о трудовой миграции с Германией", category: "Международное", source: "Kun.uz", url: "https://kun.uz/en/news/2024/06/20/uzbekistan-germany-to-concur-with-labor-migration", content: "Завершено соглашение, ориентированное на профессиональное обучение." }
+                ]},
+
+                legalHub: { title: "База знаний", subtitle: "Руководства по фундаментальным правам и защитным механизмам.", cards: [{ id: "essentialRights", title: "Основные права", desc: "Конституционные и международные права." }, { id: "guides", title: "Руководства", desc: "Инструкции по реагированию на нарушения." }, { id: "conventions", title: "Конвенции", desc: "Ратифицированные договоры ООН." }, { id: "visas", title: "Визовые правила", desc: "Требования для паспорта РУз." }] },
+                directoryHub: { title: "Справочники", subtitle: "Официальные контакты и полномочия госорганов.", cards: [{ id: "institutions", title: "Госучреждения (УЗБ)", desc: "Омбудсман, министерства и агентства." }, { id: "embassies", title: "Посольства", desc: "Дипломатические миссии за рубежом." }] },
+
+                visaData: { title: "Визовые требования", warning: "Визовые правила могут меняться. Обязательно проверяйте требования на сайте посольства перед вылетом.", data: [
+                    { title: "Безвизовый въезд", status: "Виза не требуется", statusColor: "text-emerald-800 bg-emerald-50 border-emerald-300", desc: "Свободный въезд в более чем 50 стран, включая новые соглашения 2024–2026 годов.", content: "СНГ и регион: Россия, Казахстан, Кыргызстан, Таджикистан, Беларусь, Армения, Азербайджан, Грузия, Молдова, Украина.\nАзия и Ближний Восток: Турция, ОАЭ, Китай, Иран, Малайзия, Таиланд, Катар, Оман, Иордания, Монголия, Филиппины, Сингапур.\nОстрова и Америка: Антигуа и Барбуда, Барбадос, Доминика, Сейшелы, Гаити." },
+                    { title: "Электронная виза / VOA", status: "Упрощенный въезд", statusColor: "text-amber-800 bg-amber-50 border-amber-300", desc: "Виза по прибытии или e-Visa доступна для 30-40 государств.", content: "Азия: Индонезия (Бали), Мальдивы, Шри-Ланка, Индия, Вьетнам, Камбоджа.\nБлижний Восток и Африка: Саудовская Аравия (Умра), Египет, Кения, Мадагаскар, Маврикий, Бахрейн, Кувейт, Замбия." },
+                    { title: "Требуется виза", status: "Посольство", statusColor: "text-rose-800 bg-rose-50 border-rose-300", desc: "Предварительная виза в посольстве требуется для более чем 100 стран.", content: "Европа: Шенгенская зона (ЕС), Великобритания.\nАмерика: США, Канада.\nАзия/Океания: Япония, Южная Корея, Австралия, Новая Зеландия." }
+                ]},
+
+                essentialRights: { title: "Фундаментальные права", data: [
+                    { title: "Право на равенство", desc: "Ваш статус мигранта без документов не лишает вас базовых прав." },
+                    { title: "Свобода и неприкосновенность", desc: "Право знать причины ареста и право на адвоката." },
+                    { title: "Запрет пыток", desc: "Абсолютная норма международного права без исключений." },
+                    { title: "Справедливый суд", desc: "Право на независимое разбирательство и переводчика." },
+                    { title: "Защита от депортации", desc: "Иностранец может быть выслан только по законному решению." },
+                    { title: "Невысылка (Non-Refoulement)", desc: "Запрет на возврат в страну, где угрожают пытки." },
+                    { title: "Трудовые права", desc: "Право на безопасный труд и равную оплату. Принудительный труд запрещен." }
+                ]},
+                guidesData: { title: "Руководства к действию", data: [
+                    { title: "Изъятие паспорта", category: "Права", content: "1. Отправьте письменное требование работодателю.\n2. Не подписывайте пустые бланки.\n3. Свяжитесь с Посольством.\n4. Подайте жалобу в полицию." },
+                    { title: "Взыскание зарплаты", category: "Труд", content: "1. Соберите контракты и фото.\n2. Направьте досудебную претензию.\n3. Подайте иск в трудовой суд." },
+                    { title: "Угроза депортации", category: "Иммиграция", content: "Требуйте официальное решение суда. Работодатели не могут депортировать." }
+                ]},
+                conventionsData: { title: "Конвенции ООН", warning: "Требуется исчерпание внутренних средств правовой защиты (Верховный суд).", data: [
+                    { title: "Пакт о гражданских правах (МПГПП)", status: "Ратифицирован: 1995", desc: "Возможность подачи жалоб в Комитет ООН по правам человека." },
+                    { title: "Конвенция против пыток (CAT)", status: "Ратифицирована: 1995", desc: "Использование механизмов ООН при бездействии властей." },
+                    { title: "О ликвидации дискриминации женщин (CEDAW)", status: "Ратифицирована: 1995", desc: "Жалобы на системную гендерную дискриминацию." }
+                ]},
+                institutionsData: { title: "Государственные учреждения", data: [
+                    { title: "Омбудсман РУз", desc: "Парламентский надзор за госорганами.", details: "Телефон: +998 71 239 81 36\nWeb: ombudsman.uz" },
+                    { title: "Нац. центр по правам человека", desc: "Взаимодействие с ООН.", details: "Телефон: +998 71 239 13 58\nWeb: nhrc.uz" },
+                    { title: "Министерство юстиции", desc: "Бесплатная правовая помощь.", details: "Горячая линия: 1008\nWeb: minjust.uz" },
+                    { title: "Миграционное агентство", desc: "Защита трудовых прав за рубежом.", details: "Горячая линия: 1282\nWeb: migration.uz" },
+                    { title: "Генеральная прокуратура", desc: "Надзор за исполнением законов.", details: "Горячая линия: 1007\nWeb: prokuratura.uz" },
+                    { title: "Верховный суд", desc: "Высшая судебная инстанция.", details: "Web: sud.uz" }
+                ]},
+                embassiesData: { title: "Посольства и Консульства", data: [
+                    { title: "Посольство в РФ (Москва)", desc: "Широкая юридическая поддержка.", details: "Адрес: Погорельский переулок 12\nТелефон: +7 499 230 00 76\nEmail: info@uzembassy.ru" },
+                    { title: "Посольство в Турции (Анкара)", desc: "Консульская защита граждан.", details: "Адрес: Hilal Mah. 706. Sk. No:4, Çankaya\nТелефон: +90 312 441 17 46\nEmail: uzembassy@uzembassy.org.tr" },
+                    { title: "Ген. консульство в Казахстане (Алматы)", desc: "Помощь трудовым мигрантам.", details: "Адрес: ул. Барибаева, 36\nТелефон: +7 727 291 06 44" },
+                    { title: "Посольство в Южной Корее (Сеул)", desc: "Защита прав работников.", details: "Адрес: 27, Daesagwan-Ro 11-Gil\nТелефон: +82 2 574 65 54" },
+                    { title: "Ген. консульство в ОАЭ (Дубай)", desc: "Помощь мигрантам.", details: "Адрес: Villa 44, Al Badaa\nТелефон: +971 4 371 3333" },
+                    { title: "Посольство в Германии (Берлин)", desc: "Институты ЕС.", details: "Адрес: Perleberger Str. 62\nТелефон: +49 30 394 098 13" },
+                    { title: "Посольство в Польше (Варшава)", desc: "Развивающееся направление ЕС.", details: "Адрес: Kraski 21\nТелефон: +48 22 894 62 30" },
+                    { title: "Посольство в Великобритании (Лондон)", desc: "Защита сезонных работников.", details: "Адрес: 41 Holland Park\nТелефон: +44 20 7229 7679" },
+                    { title: "Посольство в Саудовской Аравии (Эр-Рияд)", desc: "Поддержка граждан в регионе залива.", details: "Адрес: Al-Waha District, Abu Al-Mawahib St.\nТелефон: +966 11 462 3550" },
+                    { title: "Посольство в Японии (Токио)", desc: "Трудовые соглашения.", details: "Адрес: 2-1-52 Takanawa, Minato-ku\nТелефон: +81 3 6277 3442" },
+                    { title: "Посольство в США (Вашингтон)", desc: "Консульская защита.", details: "Адрес: 3922 14th St NW\nТелефон: +1 202 885 3260" }
+                ]},
+                about: {
+                    title: "О проекте OpenPath",
+                    ourStoryTitle: "История",
+                    ourStory: "Права существуют в договорах, но люди живут в реальности. Мы создали OpenPath, чтобы предоставить уязвимым группам институциональные карты для доступа к правосудию.",
+                    missionTitle: "Миссия",
+                    mission: "Устранить барьеры между гражданами и системами правосудия.",
+                    visionTitle: "Видение",
+                    vision: "Беспрепятственный доступ к механизмам защиты для каждого.",
+                    valuesTitle: "Принципы",
+                    values: ["Независимость", "Достоинство", "Прозрачность", "Конфиденциальность", "Законность"],
+                    methodologyTitle: "Методология",
+                    methodology: "Мы оцениваем дела и связываем жертв с компетентными органами.",
+                    founderTitle: "Основатель",
+                    founderName: "Баходир Музаффаров",
+                    founderRole: "Исследователь международного права",
+                    founderEduTitle: "Образование",
+                    founderEdu: "Окончил Президентскую школу в Бухаре по программе Cambridge International Curriculum. Студент Ташкентского государственного юридического университета (ТГЮУ) по направлению «Международное право».",
+                    founderExpTitle: "Опыт работы",
+                    founderExp: "Стажировки в Министерстве юстиции Узбекистана (платформа lawyer.ijro.uz, 2025–2026), Министерстве иностранных дел Узбекистана (2026) и Посольстве Узбекистана в Индии. Волонтер Юридической клиники ТГЮУ, помогает гражданам с обращениями и подготовкой судебных документов.",
+                    founderAwardsTitle: "Достижения",
+                    founderAwards: "Университетский научный ассистент, участвующий в подготовке книги по международному праву. Автор публикации о регулировании криптовалют в Узбекском журнале права и цифровой политики. Обладатель Национальной стипендиальной программы Словацкой Республики для обучения в Университете имени Павла Йозефа Шафарика. Официальный волонтер 43-й Генеральной конференции ЮНЕСКО.",
+                    founderQuote: "\"Знать права — лишь начало. Нужна карта институтов, способных их восстановить.\""
+                },
+                support: { title: "Поддержите нас", subtitle: "Ваши средства направляются на правовую помощь уязвимым лицам.", donateBtn: "Пожертвовать", contact: "Контакты", email: "bahodirmuzaffarov5@gmail.com", phone: "(+998) 88 292 29 99", address: "Ташкент, Узбекистан" }
+            },
+            uz: {
+                nav: { home: "Asosiy", news: "Yangiliklar", getHelp: "Murojaat", legal: "Huquqiy Bilim", directories: "Ma'lumotnoma", about: "Biz Haqimizda", support: "Qo'llab-quvvatlash" },
+                common: { readMore: "Batafsil", back: "Qaytish", viewDetails: "Tafsilotlar", caseRef: "ISH №", req: "Majburiy" },
+                hero: {
+                    tag: "YANGI • 2026 XIZMATLARI",
+                    title: "Huquq va Adolatga Yo'l",
+                    subtitle: "Migrantlar va zaif qatlamlarga huquqlarini himoya qilish uchun zarur bo'lgan huquqiy bilim va amaliy yo'llanmalar taqdim etamiz.",
+                    cta: "Murojaat Yo'llash",
+                    ctaSecondary: "Bilimlar Bazasi",
+                },
+                stats: [
+                    { value: "7", label: "Asosiy huquq yo'nalishlari", suffix: "" },
+                    { value: "11", label: "Davlat va BMT tashkilotlari", suffix: "+" },
+                    { value: "3", label: "Ratifikatsiya qilingan konvensiya", suffix: "" },
+                    { value: "100", label: "Har doim bepul", suffix: "%" }
+                ],
+                homeExtra: {
+                    emergencyTitle: "Favqulodda Xavf ostidamisiz?",
+                    emergencyDesc: "Agar siz jismoniy xavf ostida bo'lsangiz, mahalliy politsiya yoki o'z elchixonangiz bilan zudlik bilan bog'laning. OpenPath huquqiy yordam platformasidir.",
+                    focusTitle: "Asosiy Yo'nalishlarimiz",
+                    focus1Title: "Institutsional Kirish", focus1Desc: "Milliy sudlar va BMT organlari bilan bevosita aloqa protokollari.",
+                    focus2Title: "Ma'lumotlar Himoyasi", focus2Desc: "Arizangizni xavfsiz va mutlaq maxfiy qayta ishlash kafolati.",
+                    focus3Title: "Pro Bono Xizmat", focus3Desc: "Zaif qatlamlar uchun barcha huquqiy yordam bepul taqdim etiladi.",
+                    latestNewsTitle: "So'nggi Yangiliklar",
+                    processTitle: "Ish OpenPath Orqali Qanday Yuriladi",
+                    processSubtitle: "Har bir murojaat bir xil tartibli izchillikda ko'rib chiqiladi birinchi aloqadan institutsional yo'naltirishgacha.",
+                    whoTitle: "Biz Kimlarga Yordam Beramiz",
+                    whoSubtitle: "Bizning ishimiz institutsional bo'shliqlardan eng ko'p zarar ko'radigan insonlarga qaratilgan.",
+                    who: [
+                        { title: "Mehnat Migrantlari", desc: "Chet elda oylik to'lanmasligi yoki pasport olib qo'yilishiga duch kelgan ishchilar." },
+                        { title: "Hujjatsiz Shaxslar", desc: "Statusidan ularning qonuniy shikoyatlarini bostirish uchun foydalanilayotgan insonlar." },
+                        { title: "Zo'ravonlik Qurbonlari", desc: "Kamsitish yoki huquq-tartibot organlari suiiste'molligiga duch kelganlar." },
+                        { title: "Xavf Ostidagi Oilalar", desc: "Deportatsiya tahdidi yoki noaniq fuqarolik holatiga duch kelganlar." }
+                    ],
+                    faqTitle: "Ko'p So'raladigan Savollar",
+                    faq: [
+                        { q: "Xizmat rostdan ham bepulmi?", a: "Ha. Barcha maslahat, hujjatlarni tayyorlashda yordam va institutsional yo'naltirish pro bono asosida, hech qanday yashirin to'lovsiz taqdim etiladi." },
+                        { q: "Siz meni sudda vakillik qilasizmi?", a: "Yo'q. Biz yuridik firma emasmiz. Siz yoxud litsenziyalangan advokat ishonch bilan harakat qilishi uchun to'g'ri huquqiy xarita va hujjatlarni tayyorlaymiz." },
+                        { q: "Javobni qachon olaman?", a: "Arizalar navbat bilan ko'rib chiqiladi. Shoshilinch holatlar ustuvor hisoblanadi, biroq biz favqulodda yordam xizmati emasmiz." },
+                        { q: "Ma'lumotlarim maxfiymi?", a: "Ha. Sizning ariza ma'lumotlaringiz faqat huquqiy baholash uchun ishlatiladi va roziligingizsiz uchinchi tomonlarga berilmaydi." }
+                    ]
+                },
+                disclaimer: "OpenPath International nodavlat tashkilot. Biz huquqiy ma'lumot beramiz, yuridik firma emasmiz.",
+                howItWorks: { title: "Xizmat Bosqichlari", step1: "Baholash", step1Desc: "Vaziyatni o'rganish va yurisdiksiyani aniqlash.", step2: "Yo'nalish", step2Desc: "Ma'muriy va sud mexanizmlarini belgilash.", step3: "Hujjatlashtirish", step3Desc: "Rasmiy shikoyatlarni tuzishda yordam." },
+                getHelp: {
+                    title: "Murojaat Formasi",
+                    subtitle: "Iltimos, shaklni to'ldiring. So'rovingiz to'g'ridan-to'g'ri huquqiy bo'lim pochtasiga yuboriladi, tashqi ilovalarsiz.",
+                    formName: "F.I.Sh.", formCountry: "Yashash Davlati", formNationality: "Fuqarolik", formContact: "Email yoki Telefon", formIssue: "Muammo Turi", formDesc: "Vaziyatning batafsil tavsifi", formUrgency: "Jismoniy xavf bormi?", submit: "So'rovni Yuborish", processing: "Yuborilmoqda...", privacyConfirm: "Ma'lumotlarimni huquqiy baholash uchun maxfiy qayta ishlashga roziman.", formNotice: "Hech qachon bu forma orqali parollaringizni yubormang.",
+                    successTitle: "Murojaat qabul qilindi",
+                    successDesc: "Sizning so'rovingiz OpenPath huquqiy bo'limiga yuborildi. Vakilimiz yaqin orada siz bilan bog'lanadi.",
+                    returnBtn: "Yangi so'rov yuborish",
+                    errorTitle: "Xatolik yuz berdi",
+                    errorDesc: "So'rovni yuborib bo'lmadi. Internet aloqasini tekshirib qayta urinib ko'ring yoki bizga to'g'ridan-to'g'ri yozing.",
+                    retryBtn: "Qayta urinish"
+                },
+                issues: ["Oylik berilmasligi / Ekspluatatsiya", "Pasport olib qo'yilishi", "Deportatsiya", "Huquq-tartibot organlari", "Kamsitish / Zo'ravonlik", "Tibbiyot muammolari", "Boshqa"],
+
+                newsData: { title: "Yangiliklar va Siyosat", subtitle: "Inson huquqlari va migratsiya sohasidagi rasmiy yangiliklar.", data: [
+                    { date: "Iyun 2026", title: "BMT bilan hamkorlik kuchaytirildi", category: "Xalqaro", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=human+rights", content: "O'zbekiston fuqaroligi bo'lmagan shaxslar bo'yicha BMT bilan hamkorlikni oshirdi." },
+                    { date: "Aprel 2026", title: "Ombudsman hisoboti e'lon qilindi", category: "Inson Huquqlari", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=human+rights", content: "2025-yilda huquqbuzarlik uchun 118 nafar amaldor javobgarlikka tortildi." },
+                    { date: "Mart 2026", title: "AQSh mehnat kvotalari masalasi", category: "Migratsiya", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "AQShga yuborilgan ilk guruh kelajakdagi kvotalarni belgilaydi." },
+                    { date: "Oktabr 2025", title: "Janubiy Koreya mavsumiy ishlari", category: "Migratsiya", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "Mavsumiy ishlar dasturi rasman tiklandi." },
+                    { date: "Sentabr 2025", title: "Buyuk Britaniya kvotalari oshdi", category: "Migratsiya", source: "Kun.uz", url: "https://kun.uz/en/news/list?f=tag&name=labor+migration", content: "Buyuk Britaniya o'zbekistonliklar uchun kvotalarni oshirdi." },
+                    { date: "Yanvar 2025", title: "Janubiy Koreya kvotasi qisqardi", category: "Siyosat", source: "Kun.uz", url: "https://kun.uz/en/news/2025/01/18/south-korea-reduces-uzbek-migrant-intake-amid-job-abandonment-concerns", content: "Ishchilarning qochib ketishi sababli E-9 vizasi bo'yicha qabul qisqartirildi." },
+                    { date: "Oktabr 2024", title: "PF-162 Farmoni qabul qilindi", category: "Qonunchilik", source: "CIS Legislation", url: "https://cis-legislation.com/document.fwx?rgn=162994", content: "Migratsiya agentligi davlat siyosatini amalga oshiruvchi organ etib belgilandi." },
+                    { date: "Iyun 2024", title: "Germaniya bilan kelishuv", category: "Xalqaro", source: "Kun.uz", url: "https://kun.uz/en/news/2024/06/20/uzbekistan-germany-to-concur-with-labor-migration", content: "Kasbiy ta'limga qaratilgan ikki tomonlama bitim tuzildi." }
+                ]},
+
+                legalHub: { title: "Huquqiy Bilimlar Markazi", subtitle: "Asosiy huquqlar va himoya mexanizmlari bo'yicha ma'lumotlar.", cards: [{ id: "essentialRights", title: "Asosiy Huquqlar", desc: "Konstitutsiyaviy va xalqaro huquqlar." }, { id: "guides", title: "Qo'llanmalar", desc: "Muammolarni hal qilish tartib-qoidalari." }, { id: "conventions", title: "Konvensiyalar", desc: "BMT shartnomalari." }, { id: "visas", title: "Viza Qoidalari", desc: "O'zbekiston pasporti uchun viza ma'lumotlari." }] },
+                directoryHub: { title: "Ma'lumotnomalar", subtitle: "Davlat va diplomatik organlar kontaktlari.", cards: [{ id: "institutions", title: "Davlat Tashkilotlari", desc: "Vazirlik va agentliklar." }, { id: "embassies", title: "Elchixonalar", desc: "Chet eldagi diplomatik vakolatxonalar." }] },
+
+                visaData: { title: "Viza Qoidalari", warning: "Viza qoidalari o'zgaruvchan. Sayohatdan oldin doimo elchixona orqali tekshiring.", data: [
+                    { title: "Vizasiz Davlatlar", status: "Viza Kerak Emas", statusColor: "text-emerald-800 bg-emerald-50 border-emerald-300", desc: "2024–2026 yillardagi yangi kelishuvlar bilan 50 dan ortiq davlatga vizasiz kirish.", content: "MDH va mintaqa: Rossiya, Qozog'iston, Qirg'iziston, Tojikiston, Belarus, Armaniston, Ozarbayjon, Gruziya, Moldova, Ukraina.\nOsiyo va Yaqin Sharq: Turkiya, BAA, Xitoy, Eron, Malayziya, Tailand, Qatar, Ummon, Iordaniya, Mongoliya, Filippin, Singapur.\nAmerika va orollar: Antigua va Barbuda, Barbados, Dominika, Seyshel orollari, Gaiti." },
+                    { title: "Elektron Viza / VOA", status: "Harakat Talab Qilinadi", statusColor: "text-amber-800 bg-amber-50 border-amber-300", desc: "30-40 davlatda onlayn viza yoki yetib borganda viza mavjud.", content: "Osiyo: Indoneziya (Bali), Maldiv, Shri-Lanka, Hindiston, Vyetnam, Kambodja.\nYaqin Sharq va Afrika: Saudiya Arabistoni (Umra), Misr, Keniya, Madagaskar, Mavrikiy, Bahrayn, Quvayt, Zambiya." },
+                    { title: "Viza Kerak", status: "Elchixona orqali", statusColor: "text-rose-800 bg-rose-50 border-rose-300", desc: "100 dan ortiq davlat vizani oldindan elchixonadan olishni talab qiladi.", content: "Yevropa: Shengen hududi (YI), Buyuk Britaniya.\nAmerika: AQSh, Kanada.\nOsiyo/Okeaniya: Yaponiya, Janubiy Koreya, Avstraliya, Yangi Zelandiya." }
+                ]},
+
+                essentialRights: { title: "Inson Huquqlari", data: [
+                    { title: "Tenglik huquqi", desc: "Sizning hujjatsiz migrant ekanligingiz sizni insoniy huquqlardan mahrum qilmaydi." },
+                    { title: "Daxlsizlik huquqi", desc: "Asossiz hibsga olinish taqiqlanadi. Sabablarni bilish va advokat olish huquqiga egasiz." },
+                    { title: "Qiynoqlar taqiqi", desc: "Hech kim qiynoqqa tortilmasligi kerak. Bu mutlaq xalqaro qoidadir." },
+                    { title: "Adolatli sudlov", desc: "Mustaqil sud tomonidan ko'rib chiqilish va tarjimon huquqi." },
+                    { title: "Deportatsiyadan himoya", desc: "Siz faqat qonuniy sud qarori bilan chiqarib yuborilishingiz mumkin." },
+                    { title: "Qaytarib yubormaslik", desc: "Hayotga xavf tug'diradigan davlatga deportatsiya qilish taqiqlanadi." },
+                    { title: "Mehnat huquqlari", desc: "Teng haq to'lash va xavfsiz mehnat. Majburiy mehnat taqiqlangan." }
+                ]},
+                guidesData: { title: "Amaliy Qo'llanmalar", data: [
+                    { title: "Pasport olib qo'yilganda", category: "Huquq", content: "1. Ish beruvchidan yozma ravishda qaytarishni talab qiling.\n2. Hujjatlarga imzo chekmang.\n3. Elchixonaga murojaat qiling.\n4. Politsiyaga ariza yozing." },
+                    { title: "Oylikni undirish", category: "Mehnat", content: "1. Dalillarni yig'ing (shartnoma, sms).\n2. Talabnoma yuboring.\n3. Mehnat tribunaliga murojaat qiling." },
+                    { title: "Deportatsiya tahdidi", category: "Migratsiya", content: "Ish beruvchilar deportatsiya qila olmaydi. Sud qarorini talab qiling." }
+                ]},
+                conventionsData: { title: "Ratifikatsiya Qilingan Konvensiyalar", warning: "BMT qo'mitalariga murojaat uchun Oliy Sudgacha bo'lgan barcha bosqichlardan o'tish shart.", data: [
+                    { title: "Fuqarolik va siyosiy huquqlar pakti", status: "Ratifikatsiya: 1995", desc: "BMT Inson huquqlari qo'mitasiga bevosita shikoyat qilish imkoniyati." },
+                    { title: "Qiynoqlarga qarshi konvensiya (CAT)", status: "Ratifikatsiya: 1995", desc: "Milliy tergovlar samarasiz bo'lsa BMT mexanizmidan foydalanish." },
+                    { title: "Xotin-qizlarni kamsitishga qarshi (CEDAW)", status: "Ratifikatsiya: 1995", desc: "Tizimli muammolarni CEDAW qo'mitasiga olib chiqish." }
+                ]},
+                institutionsData: { title: "Davlat Muassasalari", data: [
+                    { title: "Ombudsman", desc: "Davlat organlari ustidan parlament nazorati.", details: "Telefon: +998 71 239 81 36\nWeb: ombudsman.uz" },
+                    { title: "Inson huquqlari markazi", desc: "BMT bilan hamkorlik.", details: "Telefon: +998 71 239 13 58\nWeb: nhrc.uz" },
+                    { title: "Adliya vazirligi", desc: "Huquqiy yordam.", details: "Telefon: 1008\nWeb: minjust.uz" },
+                    { title: "Migratsiya agentligi", desc: "Chet eldagi ishchilar huquqlari.", details: "Telefon: 1282\nWeb: migration.uz" },
+                    { title: "Bosh prokuratura", desc: "Qonunlar nazorati.", details: "Telefon: 1007\nWeb: prokuratura.uz" },
+                    { title: "Oliy Sud", desc: "Oliy sudlov organi.", details: "Web: sud.uz" }
+                ]},
+                embassiesData: { title: "Elchixonalar", data: [
+                    { title: "Rossiyadagi Elchixona (Moskva)", desc: "Keng qamrovli yordam.", details: "Manzil: Pogorelskiy Pereulok 12\nTel: +7 499 230 00 76\nEmail: info@uzembassy.ru" },
+                    { title: "Turkiyadagi Elchixona (Anqara)", desc: "Konsullik himoyasi.", details: "Manzil: Hilal Mah. 706. Sk. No:4, Çankaya\nTel: +90 312 441 17 46\nEmail: uzembassy@uzembassy.org.tr" },
+                    { title: "Qozog'istondagi Bosh Konsullik (Olmaota)", desc: "Migrantlar va tranzit yordami.", details: "Manzil: Baribayev ko'chasi, 36\nTel: +7 727 291 06 44" },
+                    { title: "Janubiy Koreyadagi Elchixona (Seul)", desc: "Mehnat vizalari va himoya.", details: "Manzil: 27, Daesagwan-Ro 11-Gil\nTel: +82 2 574 65 54" },
+                    { title: "BAAdagi Bosh Konsullik (Dubay)", desc: "Dubay hududi.", details: "Manzil: Villa 44, Al Badaa\nTel: +971 4 371 3333" },
+                    { title: "Germaniyadagi Elchixona (Berlin)", desc: "Yevropa Ittifoqi.", details: "Manzil: Perleberger Str. 62\nTel: +49 30 394 098 13" },
+                    { title: "Polshadagi Elchixona (Varshava)", desc: "YI rivojlanayotgan yo'nalishi.", details: "Manzil: Kraski 21\nTel: +48 22 894 62 30" },
+                    { title: "Buyuk Britaniyadagi Elchixona (London)", desc: "Mavsumiy ishchilar himoyasi.", details: "Manzil: 41 Holland Park\nTel: +44 20 7229 7679" },
+                    { title: "Saudiya Arabistonidagi Elchixona (Ar-Riyod)", desc: "Ko'rfaz davlatlaridagi yordam.", details: "Manzil: Al-Waha District, Abu Al-Mawahib St.\nTel: +966 11 462 3550" },
+                    { title: "Yaponiyadagi Elchixona (Tokio)", desc: "Mehnat shartnomalari.", details: "Manzil: 2-1-52 Takanawa, Minato-ku\nTel: +81 3 6277 3442" },
+                    { title: "AQShdagi Elchixona (Vashington)", desc: "Shimoliy Amerika.", details: "Manzil: 3922 14th St NW\nTel: +1 202 885 3260" }
+                ]},
+                about: {
+                    title: "OpenPath Haqida",
+                    ourStoryTitle: "Hikoyamiz",
+                    ourStory: "Inson huquqlari qog'ozda bor, lekin odamlar reallikda yashaydi. OpenPath huquqiy savodsizlikni yo'qotish va amaliy yordam berish uchun tashkil etildi.",
+                    missionTitle: "Missiya",
+                    mission: "Zaif insonlar va adliya tizimlari o'rtasidagi byurokratik to'siqlarni yo'q qilish.",
+                    visionTitle: "Vizyon",
+                    vision: "Barchaga adolat mexanizmlaridan erkin foydalanish imkoniyati.",
+                    valuesTitle: "Qadriyatlar",
+                    values: ["Mustaqillik", "Inson Qadri", "Shaffoflik", "Maxfiylik", "Qonun Ustuvorligi"],
+                    methodologyTitle: "Metodologiya",
+                    methodology: "Vaziyatni baholab, to'g'ri sud va BMT organlariga murojaat qilishda yordam beramiz.",
+                    founderTitle: "Asoschi",
+                    founderName: "Bahodir Muzaffarov",
+                    founderRole: "Xalqaro Huquq Tadqiqotchisi",
+                    founderEduTitle: "Ta'lim",
+                    founderEdu: "Buxoro Prezident maktabi bitiruvchisi (Cambridge International Curriculum). Hozirda Toshkent Davlat Yuridik Universiteti (TDYU) xalqaro huquq yo'nalishi talabasi.",
+                    founderExpTitle: "Amaliyot",
+                    founderExp: "O'zbekiston Adliya vazirligida (lawyer.ijro.uz platformasi, 2025–2026), Tashqi ishlar vazirligida (2026) va Hindistondagi O'zbekiston Elchixonasida amaliyot o'tagan. TDYU Yuridik klinikasida volontyor sifatida fuqarolarga murojaatlarni ko'rib chiqish va sud hujjatlarini tayyorlashda yordam beradi.",
+                    founderAwardsTitle: "Yutuqlar",
+                    founderAwards: "Xalqaro huquq bo'yicha kitob uchun tadqiqot olib boruvchi universitet ilmiy yordamchisi. O'zbek huquq va raqamli siyosat jurnalida kriptovalyutalarni tartibga solish bo'yicha maqola muallifi. Slovakiya Respublikasining Pavol Jozef Šafárik universitetida o'qish uchun Milliy stipendiya dasturi g'olibi. YUNESKOning 43-Bosh konferensiyasida rasmiy volontyor.",
+                    founderQuote: "\"Huquqni bilish bu faqat boshlanishi; eng muhimi - amaliy institutsional yo'lni bilishdir.\""
+                },
+                support: { title: "Bizni Qo'llab-Quvvatlang", subtitle: "Xayriyalar bepul huquqiy yordam va tizimni saqlashga sarflanadi.", donateBtn: "Hissa qo'shish", contact: "Aloqa", email: "bahodirmuzaffarov5@gmail.com", phone: "(+998) 88 292 29 99", address: "Toshkent, O'zbekiston" }
+            }
+        };
+
+        // --- ICONS & LOGOS ---
+
+        const CustomLogo = ({ className, style }) => (
+            <svg viewBox="0 0 100 100" fill="currentColor" className={className} style={style}>
+                <path d="M93.8,25.5c-3.3,1.5-6.9,2.5-10.6,2.9c3.8-2.3,6.8-5.9,8.2-10.2c-3.6,2.1-7.5,3.7-11.7,4.5
+                c-3.4-3.6-8.2-5.9-13.5-5.9c-10.1,0-18.3,8.2-18.3,18.3c0,1.4,0.2,2.8,0.5,4.2C33.2,38.6,19.6,30.5,10.5,18.6
+                c-1.6,2.7-2.5,5.8-2.5,9.2c0,6.3,3.2,11.9,8.1,15.2c-3-0.1-5.9-0.9-8.3-2.3c0,0.1,0,0.2,0,0.2c0,8.9,6.3,16.3,14.7,18
+                c-1.5,0.4-3.2,0.6-4.9,0.6c-1.2,0-2.3-0.1-3.4-0.3c2.3,7.3,9.1,12.6,17.1,12.7c-6.3,4.9-14.2,7.8-22.8,7.8c-1.5,0-2.9-0.1-4.4-0.3
+                c8.1,5.2,17.7,8.2,28.1,8.2c33.7,0,52.2-27.9,52.2-52.2c0-0.8,0-1.6-0.1-2.4C88.2,32.6,91.3,29.3,93.8,25.5z"/>
+            </svg>
+        );
+
+        const SVGIcons = {
+            Shield: <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>,
+            BookOpen: <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>,
+            Globe: <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>,
+            Alert: <svg className="w-6 h-6 text-terracotta" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        };
+
+        const Reveal = ({ children, className = "" }) => {
+            const ref = useRef(null);
+            const [visible, setVisible] = useState(false);
+            useEffect(() => {
+                const obs = new IntersectionObserver(([entry]) => {
+                    if (entry.isIntersecting) { setVisible(true); obs.disconnect(); }
+                }, { threshold: 0.15 });
+                if (ref.current) obs.observe(ref.current);
+                return () => obs.disconnect();
+            }, []);
+            return <div ref={ref} className={`scroll-reveal ${visible ? 'is-visible' : ''} ${className}`}>{children}</div>;
+        };
+
+        const PageHeader = ({ title, subtitle, refCode }) => (
+            <div className="py-16 md:py-24 relative overflow-hidden text-white" style={{background: 'linear-gradient(160deg, var(--ink) 0%, var(--ink-soft) 100%)'}}>
+                <div className="absolute inset-0 paper-grain opacity-40 pointer-events-none"></div>
+                <div className="absolute top-[-40%] right-[-8%] w-[36vw] h-[36vw] rounded-full mix-blend-overlay filter blur-[90px] opacity-40" style={{background: 'var(--verdigris)'}}></div>
+                <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                    {refCode && <span className="mono-text text-xs tracking-widest text-white/50 block mb-3">{refCode}</span>}
+                    <h2 className="text-3xl md:text-5xl font-bold mb-4 serif-text text-white">{title}</h2>
+                    {subtitle && <p className="text-lg text-white/70 max-w-2xl font-light">{subtitle}</p>}
+                </div>
+            </div>
+        );
+
+        const Navbar = ({ currentView, setView, lang, setLang, t }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const navItems = [
+                { id: 'home', label: t.nav.home },
+                { id: 'news', label: t.nav.news },
+                { id: 'legal', label: t.nav.legal },
+                { id: 'directories', label: t.nav.directories },
+                { id: 'about', label: t.nav.about }
+            ];
+
+            return (
+                <div className="bg-[var(--paper)]/95 backdrop-blur sticky top-0 z-50 border-b" style={{borderColor:'rgba(18,35,63,0.12)'}}>
+                    <nav className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex justify-between h-20 items-center">
+                            <div className="flex items-center cursor-pointer focus-ring" onClick={() => setView('home')} role="button" tabIndex="0">
+                                <CustomLogo className="w-10 h-10 mr-3" style={{color: 'var(--ink)'}} />
+                                <div>
+                                    <h1 className="font-bold text-xl tracking-tight leading-none serif-text" style={{color: 'var(--ink)'}}>OpenPath<span style={{color:'var(--verdigris)'}}>.</span></h1>
+                                </div>
+                            </div>
+
+                            <div className="hidden lg:flex space-x-1 items-center">
+                                {navItems.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setView(item.id)}
+                                        className={`text-sm font-medium transition-colors px-3.5 py-2 rounded-sm focus-ring ${currentView === item.id ? 'text-white' : 'hover:bg-black/5'}`}
+                                        style={currentView === item.id ? {background: 'var(--ink)', color:'#fff'} : {color: 'var(--charcoal)'}}
+                                    >
+                                        {item.label}
+                                    </button>
+                                ))}
+                                <div className="h-6 w-px bg-black/15 mx-2"></div>
+                                <select
+                                    className="bg-transparent text-xs font-semibold focus:outline-none cursor-pointer uppercase border rounded-sm px-2 py-1.5 hover:bg-black/5 transition-colors mono-text"
+                                    style={{color: 'var(--charcoal)', borderColor: 'rgba(18,35,63,0.2)'}}
+                                    value={lang}
+                                    onChange={(e) => setLang(e.target.value)}
+                                >
+                                    <option value="en">EN</option><option value="ru">RU</option><option value="uz">UZ</option>
+                                </select>
+                                <button onClick={() => setView('getHelp')} className="btn-primary text-sm font-semibold px-5 py-2.5 rounded-sm transition-colors flex items-center ml-2 focus-ring">
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                    {t.nav.getHelp}
+                                </button>
+                            </div>
+
+                            <div className="lg:hidden flex items-center gap-3">
+                                <select className="bg-transparent text-xs font-semibold outline-none uppercase border rounded-sm px-2 py-1 mono-text" style={{borderColor: 'rgba(18,35,63,0.2)'}} value={lang} onChange={(e) => setLang(e.target.value)}>
+                                    <option value="en">EN</option><option value="ru">RU</option><option value="uz">UZ</option>
+                                </select>
+                                <button onClick={() => setIsOpen(!isOpen)} className="focus-ring" style={{color: 'var(--ink)'}} aria-label="Toggle menu">
+                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    {isOpen && (
+                        <div className="lg:hidden bg-[var(--paper)] px-4 pt-2 pb-6 space-y-1 border-b absolute w-full shadow-lg" style={{borderColor:'rgba(18,35,63,0.12)'}}>
+                            {navItems.map(item => (
+                                <button key={item.id} onClick={() => { setView(item.id); setIsOpen(false); }} className="block w-full text-left px-4 py-3 text-sm font-medium hover:bg-black/5" style={{color: 'var(--ink)'}}>
+                                    {item.label}
+                                </button>
+                            ))}
+                            <button onClick={() => { setView('getHelp'); setIsOpen(false); }} className="block w-full text-center px-4 py-3 mt-4 text-sm font-semibold text-white rounded-sm btn-primary">
+                                {t.nav.getHelp}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const Home = ({ setView, t }) => (
+            <div className="fade-in" style={{background: 'var(--paper)'}}>
+
+                <div className="py-2.5" style={{background: 'var(--terracotta)'}}>
+                    <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-2">
+                        <span className="h-1.5 w-1.5 bg-white rounded-full animate-pulse"></span>
+                        <p className="text-white text-xs font-semibold uppercase tracking-wide">{t.homeExtra.emergencyTitle}
+                            <button onClick={() => setView('getHelp')} className="ml-2 text-white/90 hover:text-white underline focus-ring">Read Policy</button>
+                        </p>
+                    </div>
+                </div>
+
+                <div className="relative overflow-hidden" style={{background: 'linear-gradient(150deg, var(--ink) 0%, var(--ink-soft) 60%, var(--ink) 100%)'}}>
+                    <div className="absolute inset-0 paper-grain opacity-30 pointer-events-none"></div>
+                    <div className="absolute top-[-25%] right-[-8%] w-[46vw] h-[46vw] rounded-full mix-blend-overlay filter blur-[110px] opacity-30" style={{background: 'var(--verdigris)'}}></div>
+                    <div className="absolute bottom-[-30%] left-[-10%] w-[38vw] h-[38vw] rounded-full mix-blend-overlay filter blur-[110px] opacity-20" style={{background: 'var(--brass)'}}></div>
+
+                    <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28 relative z-10">
+                        <div className="grid lg:grid-cols-[1fr_auto] gap-12 items-center">
+                            <div className="max-w-3xl">
+                                <span className="inline-block border border-white/20 bg-white/5 text-white/90 font-semibold text-xs uppercase tracking-[0.15em] px-4 py-1.5 rounded-sm mb-6">
+                                    {t.hero.tag}
+                                </span>
+                                <h1 className="text-4xl lg:text-6xl font-bold tracking-tight mb-8 leading-[1.1] text-white serif-text flex flex-wrap items-center gap-4">
+                                    <span>{t.hero.title}</span>
+                                </h1>
+                                <p className="text-lg lg:text-xl text-white/75 mb-10 leading-relaxed font-light max-w-2xl" style={{borderLeft: '2px solid var(--verdigris)', paddingLeft: '1rem'}}>
+                                    {t.hero.subtitle}
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-4">
+                                    <button onClick={() => setView('getHelp')} className="btn-primary font-semibold py-3.5 px-8 transition-colors text-center text-sm shadow-lg rounded-sm focus-ring">
+                                        {t.hero.cta}
+                                    </button>
+                                    <button onClick={() => setView('legal')} className="bg-white/10 hover:bg-white/20 border border-white/25 text-white font-medium py-3.5 px-8 transition-colors text-center text-sm rounded-sm focus-ring">
+                                        {t.hero.ctaSecondary}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="hidden lg:flex flex-shrink-0 justify-center items-center p-8">
+                                <CustomLogo className="w-72 h-72 text-white/20 hero-bird" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{background: 'var(--verdigris-dark)'}}>
+                    <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                            {t.stats.map((s, idx) => (
+                                <div key={idx} className="text-center md:text-left md:border-l md:pl-6 first:md:border-l-0 first:md:pl-0" style={{borderColor: 'rgba(255,255,255,0.2)'}}>
+                                    <div className="text-4xl md:text-5xl font-bold text-white serif-text leading-none mb-2">{s.value}<span style={{color:'var(--brass)'}}>{s.suffix}</span></div>
+                                    <div className="text-white/70 text-xs uppercase tracking-wide font-medium leading-snug">{s.label}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 py-20">
+                    <Reveal>
+                        <div className="mb-12 divider-stamp">
+                            <h2 className="text-2xl font-bold serif-text whitespace-nowrap" style={{color: 'var(--ink)'}}>{t.homeExtra.focusTitle}</h2>
+                        </div>
+                    </Reveal>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Reveal>
+                        <div className="file-card p-8 h-full" style={{borderTop: '3px solid var(--verdigris)'}}>
+                            <div className="w-14 h-14 rounded-sm flex items-center justify-center mb-6" style={{background: 'rgba(62,124,107,0.1)', color: 'var(--verdigris)'}}>
+                                {SVGIcons.Shield}
+                            </div>
+                            <h3 className="text-xl font-bold mb-3 serif-text" style={{color: 'var(--ink)'}}>{t.homeExtra.focus1Title}</h3>
+                            <p className="text-sm leading-relaxed" style={{color: '#4B5568'}}>{t.homeExtra.focus1Desc}</p>
+                        </div>
+                        </Reveal>
+                        <Reveal>
+                        <div className="file-card p-8 h-full" style={{borderTop: '3px solid var(--ink)'}}>
+                            <div className="w-14 h-14 rounded-sm flex items-center justify-center mb-6" style={{background: 'rgba(18,35,63,0.08)', color: 'var(--ink)'}}>
+                                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            </div>
+                            <h3 className="text-xl font-bold mb-3 serif-text" style={{color: 'var(--ink)'}}>{t.homeExtra.focus2Title}</h3>
+                            <p className="text-sm leading-relaxed" style={{color: '#4B5568'}}>{t.homeExtra.focus2Desc}</p>
+                        </div>
+                        </Reveal>
+                        <Reveal>
+                        <div className="file-card p-8 h-full" style={{borderTop: '3px solid var(--brass)'}}>
+                            <div className="w-14 h-14 rounded-sm flex items-center justify-center mb-6" style={{background: 'rgba(176,141,62,0.12)', color: 'var(--brass)'}}>
+                                {SVGIcons.Globe}
+                            </div>
+                            <h3 className="text-xl font-bold mb-3 serif-text" style={{color: 'var(--ink)'}}>{t.homeExtra.focus3Title}</h3>
+                            <p className="text-sm leading-relaxed" style={{color: '#4B5568'}}>{t.homeExtra.focus3Desc}</p>
+                        </div>
+                        </Reveal>
+                    </div>
+                </div>
+
+                <div style={{background: 'var(--paper-deep)'}} className="py-20 border-y" >
+                    <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8">
+                        <Reveal>
+                        <div className="text-center max-w-2xl mx-auto mb-16">
+                            <h2 className="text-3xl font-bold serif-text mb-4" style={{color: 'var(--ink)'}}>{t.homeExtra.processTitle}</h2>
+                            <p className="text-sm" style={{color: '#4B5568'}}>{t.homeExtra.processSubtitle}</p>
+                        </div>
+                        </Reveal>
+                        <div className="grid md:grid-cols-3 gap-8 relative">
+                            <div className="hidden md:block absolute top-8 left-[16.6%] right-[16.6%] h-px" style={{background: 'repeating-linear-gradient(90deg, var(--verdigris) 0, var(--verdigris) 6px, transparent 6px, transparent 14px)'}}></div>
+                            {[
+                                { n: '01', title: t.howItWorks.step1, desc: t.howItWorks.step1Desc },
+                                { n: '02', title: t.howItWorks.step2, desc: t.howItWorks.step2Desc },
+                                { n: '03', title: t.howItWorks.step3, desc: t.howItWorks.step3Desc }
+                            ].map((step, idx) => (
+                                <Reveal key={idx}>
+                                <div className="relative text-center md:text-left">
+                                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto md:mx-0 mb-6 mono-text font-bold text-lg relative z-10" style={{background: 'var(--ink)', color: '#fff'}}>
+                                        {step.n}
+                                    </div>
+                                    <h3 className="text-lg font-bold mb-2 serif-text" style={{color: 'var(--ink)'}}>{step.title}</h3>
+                                    <p className="text-sm leading-relaxed" style={{color: '#4B5568'}}>{step.desc}</p>
+                                </div>
+                                </Reveal>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 py-20">
+                    <Reveal>
+                    <div className="mb-12 divider-stamp">
+                        <h2 className="text-2xl font-bold serif-text whitespace-nowrap" style={{color: 'var(--ink)'}}>{t.homeExtra.whoTitle}</h2>
+                    </div>
+                    </Reveal>
+                    <Reveal><p className="text-sm mb-10 max-w-2xl" style={{color: '#4B5568'}}>{t.homeExtra.whoSubtitle}</p></Reveal>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {t.homeExtra.who.map((w, idx) => (
+                            <Reveal key={idx}>
+                            <div className="p-6 h-full rounded-sm" style={{background: '#fff', border: '1px solid rgba(18,35,63,0.1)'}}>
+                                <span className="mono-text text-xs" style={{color: 'var(--verdigris)'}}>{String(idx+1).padStart(2,'0')}</span>
+                                <h4 className="font-bold mt-2 mb-2 text-sm" style={{color: 'var(--ink)'}}>{w.title}</h4>
+                                <p className="text-xs leading-relaxed" style={{color: '#4B5568'}}>{w.desc}</p>
+                            </div>
+                            </Reveal>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 py-20">
+                    <Reveal>
+                    <div className="flex justify-between items-end mb-8 divider-stamp">
+                        <h2 className="text-2xl font-bold serif-text whitespace-nowrap" style={{color: 'var(--ink)'}}>{t.homeExtra.latestNewsTitle}</h2>
+                    </div>
+                    </Reveal>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        {t.newsData.data.slice(0, 4).map((news, idx) => (
+                            <Reveal key={idx}>
+                            <div className="file-card p-6 h-full cursor-pointer" onClick={() => setView('news')}>
+                                <span className="mono-text text-xs font-bold uppercase mb-2 block" style={{color: 'var(--verdigris)'}}>{news.date}</span>
+                                <h4 className="text-base font-bold mb-3 line-clamp-2 serif-text" style={{color: 'var(--ink)'}}>{news.title}</h4>
+                                <p className="text-sm line-clamp-3 leading-relaxed" style={{color: '#5B6577'}}>{news.content}</p>
+                            </div>
+                            </Reveal>
+                        ))}
+                    </div>
+                    <div className="text-center">
+                        <button onClick={() => setView('news')} className="text-sm font-semibold hover:underline focus-ring" style={{color: 'var(--verdigris)'}}>
+                            {t.common.readMore}
+                        </button>
+                    </div>
+                </div>
+
+                <div style={{background: 'var(--paper-deep)'}} className="py-20 border-t" >
+                    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <Reveal>
+                        <h2 className="text-2xl font-bold serif-text mb-10 text-center" style={{color: 'var(--ink)'}}>{t.homeExtra.faqTitle}</h2>
+                        </Reveal>
+                        <div className="space-y-4">
+                            {t.homeExtra.faq.map((item, idx) => (
+                                <Reveal key={idx}>
+                                <FaqItem q={item.q} a={item.a} />
+                                </Reveal>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        );
+
+        const FaqItem = ({ q, a }) => {
+            const [open, setOpen] = useState(false);
+            return (
+                <div className="rounded-sm overflow-hidden" style={{background: '#fff', border: '1px solid rgba(18,35,63,0.12)'}}>
+                    <button onClick={() => setOpen(!open)} className="w-full text-left px-6 py-4 flex justify-between items-center gap-4 focus-ring">
+                        <span className="font-semibold text-sm" style={{color: 'var(--ink)'}}>{q}</span>
+                        <span className="text-lg flex-shrink-0" style={{color: 'var(--verdigris)'}}>{open ? '−' : '+'}</span>
+                    </button>
+                    {open && <div className="px-6 pb-5 text-sm leading-relaxed" style={{color: '#4B5568'}}>{a}</div>}
+                </div>
+            );
+        };
+
+        // ============================================================
+        // GET HELP — now with real Formspree submission
+        // ============================================================
+        const GetHelp = ({ t }) => {
+            const [status, setStatus] = useState('idle'); // idle | submitting | success | error
+            const [errorMsg, setErrorMsg] = useState('');
+            const [ticketId] = useState(() => `OP-${Math.floor(Math.random() * 90000) + 10000}`);
+            const formRef = useRef(null);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                const form = e.target;
+
+                // Honeypot check — if this hidden field got filled, silently drop (likely a bot)
+                if (form._gotcha && form._gotcha.value) {
+                    setStatus('success');
+                    return;
+                }
+
+                setStatus('submitting');
+                setErrorMsg('');
+
+                const formData = new FormData(form);
+                // Friendlier subject line in your inbox
+                formData.set('_subject', `OpenPath Intake: ${formData.get('issue') || 'New Request'} — ${formData.get('name') || 'Unknown'}`);
+                formData.set('ticket_id', ticketId);
+
+                try {
+                    const response = await fetch(FORMSPREE_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json' },
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        setStatus('success');
+                        form.reset();
+                    } else {
+                        const data = await response.json().catch(() => null);
+                        const msg = data && data.errors && data.errors.length
+                            ? data.errors.map(er => er.message).join(', ')
+                            : `Server responded with status ${response.status}`;
+                        setErrorMsg(msg);
+                        setStatus('error');
+                    }
+                } catch (err) {
+                    setErrorMsg(err.message || 'Network error');
+                    setStatus('error');
+                }
+            };
+
+            return (
+                <div className="min-h-screen py-16 px-4 sm:px-6 lg:px-8 relative fade-in" style={{background: 'var(--paper)'}}>
+                    <div className="max-w-6xl mx-auto">
+                        <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col lg:flex-row relative z-10" style={{ minHeight: '600px' }}>
+
+                            {/* Left Side: Information Panel */}
+                            <div className="lg:w-2/5 p-10 lg:p-14 relative flex flex-col justify-between" style={{ background: 'var(--ink)', color: '#fff' }}>
+                                <div className="absolute inset-0 paper-grain opacity-20 pointer-events-none"></div>
+                                <div className="relative z-10">
+                                    <CustomLogo className="w-12 h-12 text-white/80 mb-8" />
+                                    <h2 className="text-3xl font-bold serif-text mb-4 leading-snug">{t.getHelp.title}</h2>
+                                    <p className="text-white/70 leading-relaxed mb-12 text-sm">{t.getHelp.subtitle}</p>
+
+                                    <div className="rounded-lg p-5 mb-8" style={{ background: 'rgba(176,67,46,0.15)', borderLeft: '4px solid var(--terracotta)' }}>
+                                        <h3 className="font-bold text-sm mb-2 flex items-center gap-2" style={{color: '#FBEAE5'}}>
+                                            {SVGIcons.Alert}
+                                            {t.homeExtra.emergencyTitle}
+                                        </h3>
+                                        <p className="text-white/70 text-xs leading-relaxed">{t.homeExtra.emergencyDesc}</p>
+                                    </div>
+                                </div>
+                                <div className="relative z-10 text-xs text-white/40 mt-12 border-t pt-4" style={{borderColor: 'rgba(255,255,255,0.1)'}}>
+                                    {t.getHelp.formNotice}
+                                </div>
+                            </div>
+
+                            {/* Right Side: Interactive Form Area */}
+                            <div className="lg:w-3/5 p-10 lg:p-14 bg-white relative">
+                                {status === 'success' ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-center fade-in">
+                                        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 text-4xl" style={{background: 'rgba(62,124,107,0.12)', color: 'var(--verdigris)'}}>✓</div>
+                                        <h2 className="text-3xl font-bold mb-4 serif-text" style={{color: 'var(--ink)'}}>{t.getHelp.successTitle}</h2>
+                                        <p className="text-base leading-relaxed mb-8 max-w-md" style={{color: '#4B5568'}}>
+                                            {t.getHelp.successDesc}
+                                        </p>
+                                        <div className="p-4 rounded-sm text-sm mb-10 inline-block" style={{background: 'var(--paper-deep)', color: '#4B5568'}}>
+                                            Ticket ID: <b className="mono-text tracking-widest" style={{color: 'var(--ink)'}}>{ticketId}</b>
+                                        </div>
+                                        <button onClick={() => setStatus('idle')} className="font-medium text-sm focus-ring px-6 py-3 border rounded transition-colors hover:bg-gray-50" style={{color: 'var(--verdigris)', borderColor: 'var(--verdigris)'}}>
+                                            {t.getHelp.returnBtn}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <form ref={formRef} onSubmit={handleSubmit} className="h-full flex flex-col fade-in space-y-8">
+
+                                        {/* Honeypot — hidden from humans, catches bots */}
+                                        <div className="hp-field" aria-hidden="true">
+                                            <label>Leave this field empty</label>
+                                            <input type="text" name="_gotcha" tabIndex="-1" autoComplete="off" />
+                                        </div>
+
+                                        {status === 'error' && (
+                                            <div className="p-4 rounded-sm flex items-start gap-3" style={{background: '#FCEBE7', border: '1px solid rgba(176,67,46,0.3)', borderLeft: '4px solid var(--terracotta)'}}>
+                                                {SVGIcons.Alert}
+                                                <div>
+                                                    <p className="font-bold text-sm" style={{color: 'var(--terracotta)'}}>{t.getHelp.errorTitle}</p>
+                                                    <p className="text-xs mt-1" style={{color: '#8A4437'}}>{t.getHelp.errorDesc}</p>
+                                                    {errorMsg && <p className="text-xs mt-1 mono-text opacity-70">{errorMsg}</p>}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="relative">
+                                                <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#8590A3' }}>{t.getHelp.formName} *</label>
+                                                <input required name="name" type="text" className="minimal-input" placeholder="Enter details" />
+                                            </div>
+                                            <div className="relative">
+                                                <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#8590A3' }}>{t.getHelp.formContact} *</label>
+                                                <input required name="contact" type="text" className="minimal-input" placeholder="Phone / Email" />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="relative">
+                                                <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#8590A3' }}>{t.getHelp.formCountry} *</label>
+                                                <input required name="country" type="text" className="minimal-input" placeholder="Enter country" />
+                                            </div>
+                                            <div className="relative">
+                                                <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#8590A3' }}>{t.getHelp.formNationality} *</label>
+                                                <input required name="nationality" type="text" className="minimal-input" placeholder="Citizenship" />
+                                            </div>
+                                        </div>
+
+                                        <div className="relative">
+                                            <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#8590A3' }}>{t.getHelp.formIssue} *</label>
+                                            <select required name="issue" defaultValue="" className="minimal-input cursor-pointer bg-transparent appearance-none rounded-none">
+                                                <option value="" disabled>Select category</option>
+                                                {t.issues.map((issue, idx) => <option key={idx} value={issue}>{issue}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div className="relative flex-grow">
+                                            <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#8590A3' }}>{t.getHelp.formDesc} *</label>
+                                            <textarea required name="description" rows="4" className="minimal-input resize-y min-h-[100px]" placeholder="Briefly explain the incident..."></textarea>
+                                        </div>
+
+                                        <div className="space-y-6 pt-4 mt-auto">
+                                            <label className="flex items-center gap-3 cursor-pointer group">
+                                                <input type="checkbox" name="urgency" value="Yes — immediate danger" className="w-5 h-5 cursor-pointer rounded border-gray-300" style={{accentColor: 'var(--terracotta)'}} />
+                                                <span className="text-sm font-medium group-hover:text-gray-900 transition-colors" style={{color: '#4B5568'}}>{t.getHelp.formUrgency}</span>
+                                            </label>
+
+                                            <label className="flex items-start gap-4 cursor-pointer group">
+                                                <input required type="checkbox" name="consent" className="mt-0.5 w-5 h-5 cursor-pointer rounded border-gray-300" style={{accentColor: 'var(--verdigris)'}} />
+                                                <span className="text-sm font-medium leading-relaxed group-hover:text-gray-900 transition-colors" style={{color: '#4B5568'}}>{t.getHelp.privacyConfirm}</span>
+                                            </label>
+
+                                            <button type="submit" disabled={status === 'submitting'} className="w-full btn-primary font-semibold py-4 px-8 rounded transition-all text-sm focus-ring shadow-sm hover:shadow-md flex justify-center items-center gap-3 disabled:opacity-75 tracking-wide uppercase">
+                                                {status === 'submitting' ? (
+                                                    <>
+                                                        <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                            <circle cx="12" cy="12" r="10" strokeOpacity="0.25"></circle>
+                                                            <path d="M4 12a8 8 0 018-8v8H4z" fill="currentColor"></path>
+                                                        </svg>
+                                                        {t.getHelp.processing}
+                                                    </>
+                                                ) : status === 'error' ? (
+                                                    t.getHelp.retryBtn
+                                                ) : (
+                                                    t.getHelp.submit
+                                                )}
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const CategoryDashboard = ({ data, setView, t }) => {
+            return (
+                <div className="min-h-screen relative" style={{background: 'var(--paper)'}}>
+                    <PageHeader title={data.title} subtitle={data.subtitle} refCode="LEGAL BASE // INDEX" />
+                    <div className="max-w-[85rem] mx-auto py-16 px-4 sm:px-6 lg:px-8 fade-in relative z-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {data.cards.map((card, idx) => (
+                                <div key={card.id} onClick={() => setView(card.id)} className="file-card p-8 cursor-pointer flex flex-col h-full group" style={{borderTop: '3px solid var(--verdigris)'}}>
+                                    <div className="w-14 h-14 rounded-sm flex items-center justify-center mb-6" style={{background: 'rgba(62,124,107,0.1)', color: 'var(--verdigris)'}}>
+                                        <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    </div>
+                                    <h3 className="text-xl font-bold mb-3 serif-text" style={{color: 'var(--ink)'}}>{card.title}</h3>
+                                    <p className="flex-grow text-sm leading-relaxed" style={{color: '#4B5568'}}>{card.desc}</p>
+                                    <div className="mt-6 flex items-center font-semibold text-sm group-hover:underline" style={{color: 'var(--verdigris)'}}>
+                                        {t.common.readMore}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ContentList = ({ data, backTarget, setView, t }) => (
+            <div className="min-h-screen relative" style={{background: 'var(--paper)'}}>
+                <PageHeader title={data.title} subtitle={data.subtitle} refCode="DOCUMENT SET" />
+
+                <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8 fade-in relative z-10">
+                    {backTarget && (
+                        <button onClick={() => setView(backTarget)} className="mb-8 font-medium text-sm flex items-center transition-colors border px-4 py-1.5 rounded-sm focus-ring" style={{color: '#4B5568', borderColor: 'rgba(18,35,63,0.15)', background: '#fff'}}>
+                            {t.common.back}
+                        </button>
+                    )}
+
+                    {data.warning && (
+                        <div className="p-4 mb-8 rounded-sm flex items-start gap-3 shadow-sm" style={{background: '#FBF3DE', border: '1px solid rgba(176,141,62,0.35)', borderLeft: '4px solid var(--brass)'}}>
+                            <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{color: 'var(--brass)'}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            <p className="font-medium text-sm" style={{color: '#6B5420'}}>{data.warning}</p>
+                        </div>
+                    )}
+
+                    <div className="space-y-6">
+                        {data.data.map((item, idx) => (
+                            <div key={idx} className="file-card p-6 md:p-8">
+                                <div className="flex flex-wrap items-center gap-3 mb-4">
+                                    {item.category && (
+                                        <span className="px-3 py-1 rounded-sm text-xs font-semibold uppercase tracking-wider mono-text" style={{background: 'var(--paper-deep)', color: '#4B5568'}}>
+                                            {item.category}
+                                        </span>
+                                    )}
+                                    {item.date && (
+                                        <span className="text-xs font-semibold uppercase tracking-wider mono-text" style={{color: 'var(--verdigris)'}}>{item.date}</span>
+                                    )}
+                                </div>
+
+                                <h3 className="text-xl md:text-2xl font-bold mb-4 serif-text" style={{color: 'var(--ink)'}}>{item.title}</h3>
+
+                                {item.status && (
+                                    <div className={`inline-block text-xs font-bold px-3 py-1 rounded-sm mb-5 border mono-text ${item.statusColor || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                        {item.status}
+                                    </div>
+                                )}
+
+                                {(item.url || item.source) && (
+                                    <div className="mb-6">
+                                        {item.url ? (
+                                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:underline focus-ring" style={{color: 'var(--verdigris)'}}>
+                                                Source: {item.source}
+                                            </a>
+                                        ) : (
+                                            <span className="text-sm font-medium" style={{color: '#8590A3'}}>Source: {item.source}</span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {item.desc && (
+                                    <p className="font-medium leading-relaxed text-base mb-4 pl-4" style={{color: 'var(--ink)', borderLeft: '2px solid var(--verdigris)'}}>{item.desc}</p>
+                                )}
+
+                                {item.content && (
+                                    <div className="max-w-none whitespace-pre-line text-sm leading-relaxed" style={{color: '#4B5568'}}>
+                                        {item.content}
+                                    </div>
+                                )}
+
+                                {item.details && (
+                                    <div className="mt-6 p-5 rounded-sm text-sm whitespace-pre-line leading-relaxed mono-text" style={{background: 'var(--paper-deep)', border: '1px solid rgba(18,35,63,0.1)', color: '#3A4256'}}>
+                                        {item.details}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+
+        const About = ({ t }) => (
+            <div className="fade-in min-h-screen relative" style={{background: 'var(--paper)'}}>
+                <PageHeader title={t.about.title} subtitle={t.about.mission} refCode="ABOUT // OPENPATH" />
+
+                <div className="py-16 max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                    <h2 className="text-2xl font-bold mb-8 serif-text" style={{color: 'var(--ink)'}}>{t.about.valuesTitle}</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        {t.about.values.map((val, idx) => (
+                            <div key={idx} className="rounded-sm p-4 text-center shadow-sm" style={{background: '#fff', border: '1px solid rgba(18,35,63,0.12)'}}>
+                                <span className="font-semibold text-sm" style={{color: 'var(--ink)'}}>{val}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="py-8 relative z-10">
+                    <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="file-card p-8" style={{borderTop: '3px solid var(--verdigris)'}}>
+                                <h3 className="text-xl font-bold mb-4 serif-text" style={{color: 'var(--ink)'}}>{t.about.ourStoryTitle}</h3>
+                                <p className="text-sm leading-relaxed" style={{color: '#4B5568'}}>{t.about.ourStory}</p>
+                            </div>
+                            <div className="file-card p-8" style={{borderTop: '3px solid var(--ink)'}}>
+                                <h3 className="text-xl font-bold mb-4 serif-text" style={{color: 'var(--ink)'}}>{t.about.visionTitle}</h3>
+                                <p className="text-sm leading-relaxed mb-6" style={{color: '#4B5568'}}>{t.about.vision}</p>
+
+                                <h3 className="text-xl font-bold mb-4 serif-text" style={{color: 'var(--ink)'}}>{t.about.methodologyTitle}</h3>
+                                <p className="text-sm leading-relaxed" style={{color: '#4B5568'}}>{t.about.methodology}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="py-16 mb-12 relative z-10">
+                    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="file-card p-8 md:p-12 relative bg-white" style={{borderTop: '6px solid var(--brass)'}}>
+                            <div className="mb-10 border-b pb-6 text-center" style={{borderColor: 'rgba(18,35,63,0.12)'}}>
+                                <span className="inline-block px-3 py-1 text-xs font-bold uppercase rounded-sm mb-4 tracking-wider mono-text" style={{background: 'var(--paper-deep)', color: '#4B5568'}}>
+                                    {t.about.founderTitle}
+                                </span>
+                                <h3 className="text-3xl font-bold mb-2 serif-text" style={{color: 'var(--ink)'}}>{t.about.founderName}</h3>
+                                <p className="font-medium text-sm" style={{color: 'var(--verdigris)'}}>{t.about.founderRole}</p>
+                            </div>
+
+                            <div className="space-y-8 text-sm leading-relaxed" style={{color: '#3A4256'}}>
+                                <div>
+                                    <h4 className="font-bold mb-2" style={{color: 'var(--ink)'}}>{t.about.founderEduTitle}</h4>
+                                    <p>{t.about.founderEdu}</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold mb-2" style={{color: 'var(--ink)'}}>{t.about.founderExpTitle}</h4>
+                                    <p>{t.about.founderExp}</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold mb-2" style={{color: 'var(--ink)'}}>{t.about.founderAwardsTitle}</h4>
+                                    <p>{t.about.founderAwards}</p>
+                                </div>
+
+                                <div className="pt-6 mt-6 border-t p-6 rounded-sm" style={{borderColor: 'rgba(18,35,63,0.12)', background: 'var(--paper-deep)'}}>
+                                    <p className="font-medium italic text-center serif-text" style={{color: 'var(--ink)'}}>
+                                        {t.about.founderQuote}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const Support = ({ t }) => (
+            <div className="min-h-screen fade-in relative" style={{background: 'var(--paper)'}}>
+                <PageHeader title={t.support.title} subtitle={t.support.subtitle} refCode="SUPPORT // CONTRIBUTE" />
+                <div className="py-16 px-4 relative z-10">
+                    <div className="max-w-2xl mx-auto text-center">
+                        <button className="btn-primary font-semibold py-3 px-10 rounded-sm shadow-sm transition-colors text-sm mb-16 focus-ring">
+                            {t.support.donateBtn}
+                        </button>
+
+                        <div className="file-card p-8 text-left" style={{borderTop: '3px solid var(--brass)'}}>
+                            <h3 className="text-lg font-bold mb-6 border-b pb-4 serif-text" style={{color: 'var(--ink)', borderColor: 'rgba(18,35,63,0.12)'}}>{t.support.contact}</h3>
+                            <div className="space-y-4 text-sm">
+                                <div className="flex justify-between items-center p-3 rounded-sm" style={{background: 'var(--paper-deep)'}}>
+                                    <span className="font-medium" style={{color: '#6B7385'}}>Email</span>
+                                    <a href={`mailto:${t.support.email}`} className="font-semibold mono-text hover:underline" style={{color: 'var(--verdigris)'}}>{t.support.email}</a>
+                                </div>
+                                <div className="flex justify-between items-center p-3 rounded-sm" style={{background: 'var(--paper-deep)'}}>
+                                    <span className="font-medium" style={{color: '#6B7385'}}>Phone</span>
+                                    <a href={`tel:${t.support.phone.replace(/[^+\d]/g, '')}`} className="font-semibold mono-text hover:underline" style={{color: 'var(--ink)'}}>{t.support.phone}</a>
+                                </div>
+                                <div className="flex justify-between items-center p-3 rounded-sm" style={{background: 'var(--paper-deep)'}}>
+                                    <span className="font-medium" style={{color: '#6B7385'}}>Location</span>
+                                    <span className="font-semibold" style={{color: 'var(--ink)'}}>{t.support.address}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const Footer = ({ t, setView }) => (
+            <footer className="py-12 border-t" style={{background: 'var(--ink)', borderColor: 'rgba(255,255,255,0.1)'}}>
+                <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-8 border-b gap-4" style={{borderColor: 'rgba(255,255,255,0.1)'}}>
+                        <div className="flex items-center">
+                            <span className="text-white font-bold text-xl block leading-none serif-text">OpenPath International</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setView('support')} className="text-xs text-white/60 hover:text-white transition-colors uppercase tracking-widest">
+                                {t.nav.support}
+                            </button>
+                            <a href={`mailto:${t.support.email}`} className="text-xs mono-text tracking-widest text-white/50 hover:text-white/80 uppercase transition-colors">
+                                {t.support.email}
+                            </a>
+                        </div>
+                    </div>
+                    <div className="text-xs text-white/50 leading-relaxed max-w-4xl">
+                        <p className="font-semibold text-white/80 mb-2 uppercase tracking-widest">Disclaimer</p>
+                        <p>{t.disclaimer}</p>
+                        <p className="mt-6">© {new Date().getFullYear()} OpenPath International. Non-Governmental Organization.</p>
+                    </div>
+                </div>
+            </footer>
+        );
+
+        const App = () => {
+            const [currentView, setView] = useState('home');
+            const [lang, setLang] = useState('en');
+            const t = content[lang];
+
+            useEffect(() => { window.scrollTo(0, 0); }, [currentView]);
+
+            const renderView = () => {
+                switch(currentView) {
+                    case 'home': return <Home setView={setView} t={t} />;
+                    case 'news': return <ContentList data={t.newsData} setView={setView} t={t} />;
+                    case 'getHelp': return <GetHelp t={t} />;
+                    case 'legal': return <CategoryDashboard data={t.legalHub} setView={setView} t={t} />;
+                    case 'directories': return <CategoryDashboard data={t.directoryHub} setView={setView} t={t} />;
+                    case 'essentialRights': return <ContentList data={t.essentialRights} backTarget="legal" setView={setView} t={t} />;
+                    case 'guides': return <ContentList data={t.guidesData} backTarget="legal" setView={setView} t={t} />;
+                    case 'conventions': return <ContentList data={t.conventionsData} backTarget="legal" setView={setView} t={t} />;
+                    case 'visas': return <ContentList data={t.visaData} backTarget="legal" setView={setView} t={t} />;
+                    case 'institutions': return <ContentList data={t.institutionsData} backTarget="directories" setView={setView} t={t} />;
+                    case 'embassies': return <ContentList data={t.embassiesData} backTarget="directories" setView={setView} t={t} />;
+                    case 'about': return <About t={t} />;
+                    case 'support': return <Support t={t} />;
+                    default: return <Home setView={setView} t={t} />;
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col font-sans" style={{background: 'var(--paper)', color: 'var(--charcoal)'}}>
+                    <Navbar currentView={currentView} setView={setView} lang={lang} setLang={setLang} t={t} />
+                    <main className="flex-grow relative z-10">
+                        {renderView()}
+                    </main>
+                    <Footer t={t} setView={setView} />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
